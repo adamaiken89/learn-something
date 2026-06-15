@@ -8,6 +8,7 @@ learning_objectives:
   - "[Objective 1]"
   - "[Objective 2]"
   - "[Objective 3]"
+# CILO filter: every module must serve ≥1 objective. If not, skip module.
 
 modules:
   - id: 1

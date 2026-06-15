@@ -3,9 +3,9 @@
 Est. study time: [X]h
 Language: [en/zh/yue]
 
-## Learning Objectives
-- [Objective 1]
-- [Objective 2]
+## Learning Objectives (maps to course CILOs)
+- [Objective 1 — serves CILO #N]
+- [Objective 2 — serves CILO #N]
 
 ---
 
@@ -32,6 +32,22 @@ Example:
 
 ---
 
+### Why This Matters (practical context)
+
+[Explain why this module's concepts matter in real-world practice. What problem do they solve? Who uses them daily? What happens if you get this wrong?]
+
+---
+
+### Common Questions
+
+**Q: [Implicit beginner question 1?]**
+A: [Clear answer with "why" rationale, not just fact]
+
+**Q: [Implicit beginner question 2?]**
+A: [Address misconception or clarify nuance]
+
+---
+
 ## Examples
 
 ### Example 1
@@ -50,6 +66,12 @@ Example:
 - [Takeaway 3]
 - [Takeaway 4]
 - [Takeaway 5]
+
+---
+
+## Common Misconception
+
+[One specific misunderstanding beginners hold about this topic. State misconception → explain why it's wrong → give correct framing.]
 
 ---
 

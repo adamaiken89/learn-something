@@ -76,8 +76,24 @@ Bash CLI. Key subsystems:
 | Template | Purpose | Key constraints |
 |----------|---------|-----------------|
 | `syllabus.yaml` | 20-module default skeleton | time_hours per module ≤ 3, prerequisites form DAG |
-| `module.md` | Lesson structure | Must include: Core Content, Feynman Explain, Reframe, Drill |
+| `module.md` | Lesson structure | Must include: Core Content, Why This Matters, Common Questions, Examples, Key Takeaways, Common Misconception, Feynman Explain, Reframe, Drill |
 | `quiz.yaml` | MCQ format | 4 options, 1 correct, difficulty 1-3, tags per category |
+
+## Content Quality Rules
+
+SKILL.md §3 now includes 7 mandatory content quality rules:
+
+| Rule | What it prevents | Example fix |
+|------|------------------|-------------|
+| 1. Explain conventions | Stating "price quoted as 95" without "why" | "95 = 95% of $1,000 par. Enables comparison across bonds with different face values." |
+| 2. Answer implicit Qs | Learner wonders "does coupon ever change?" — text silent | Add Q&A: "Fixed-rate bonds: coupon never changes. FRNs: resets periodically." |
+| 3. Pull-to-par intuition | Price convergence treated as mystery | "Premium bond falls toward par at maturity because only principal remains." |
+| 4. Causal chain first | Formula without intuition | Explain opportunity cost before bond pricing formula. |
+| 5. Practical context | Numbers without meaning | "Duration 7.5 = 7.5% price drop per 1% rate rise (small moves only)." |
+| 6. "How likely" answers | Frequency uncertainty | "Yield curve inverts rarely. ~8mo before recession typically." |
+| 7. Common misconceptions | Persistent errors | "Higher coupon ≠ better bond. Discount bonds have built-in price gain." |
+
+Apply all 7 rules to every generated module. If content violates any rule, rewrite before presenting.
 
 ## Modification Rules
 

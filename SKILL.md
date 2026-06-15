@@ -123,6 +123,7 @@ Ask: domain, level, time budget, language, practical use. Propose syllabus.
 Extract MCQs → SM-2 deck
 
 ### Content principles
+- **CILO alignment**: Every module must map to ≥1 course learning objective. Content not serving CILOs → skip. "Useless knowledge" rule: if it doesn't help learner meet objectives, don't include.
 - **Language**: Create all content in language from syllabus.yaml (`en`/`zh`/`yue`). Questions, explanations, examples all in target language.
 - **Practical first**: Start with daily encounters, bridge to theory
 - **Domain-relevant examples**: Scenarios from learner's industry
@@ -131,6 +132,61 @@ Extract MCQs → SM-2 deck
 - **Desirable difficulty**: MCQs vary difficulty over time. Same concept tested at different angles across modules.
 - **Time budget**: Module = ~2h. No module >3h.
 - **Progression**: Build on prerequisites. Earlier modules foundational.
+- **Skip permitted**: If learner does not specify details (examples, scenarios, depth), generate content anyway — fill gaps with reasonable defaults matching domain and level. Do not block on missing input.
+
+### Content quality rules (mandatory)
+
+Every module MUST pass these checks. If generated content violates any, rewrite before presenting to user.
+
+#### Rule 1: Explain conventions, don't just state them
+For every convention or market practice, explain WHY it exists:
+- Price quoted as 95–105? It's % of face value ($1,000 par → 95 = $950). Enables comparison across bonds with different face values.
+- Semi-annual coupons? Matches bond market convention in US/UK. Affects compounding math.
+- Clean vs dirty price? Clean price excludes accrued interest so quoted price doesn't jump on coupon dates.
+- 30/360 day count? Simplifies calculation vs actual/actual.
+
+Pattern: state convention → explain origin/purpose → show problem it solves.
+
+#### Rule 2: Answer implicit beginner questions
+Learners wonder things the text may not ask. Address these preemptively:
+- "Does coupon rate ever change?" → Most bonds: fixed rate, never changes. Floating-rate notes exist but are distinct.
+- "Why would anyone pay more than face value?" → Because coupon is higher than prevailing rates. Extra yield justifies premium.
+- "What happens at maturity?" → Principal returned. Bond ceases to exist. Price converges to par regardless of purchase price (pull-to-par).
+- "What if issuer goes bankrupt?" → Bondholders are creditors, senior to equity. Recovery depends on seniority and collateral.
+
+Each module should anticipate 1-3 such questions and answer them in Core Content.
+
+#### Rule 3: Pull-to-par intuition
+Every module involving bond pricing must explain price convergence to face value at maturity:
+- A $1,100 bond bought at premium will be worth only $1,000 at maturity → price declines toward par over time.
+- A $900 discount bond will be worth $1,000 at maturity → price rises toward par.
+- This is NOT driven by market rates. It's mechanical: time remaining shrinks, so remaining cash flows' PV converges to principal.
+- Implication: premium bond investors face price depreciation even without rate changes. Discount bond investors get price appreciation (accretion).
+
+#### Rule 4: Causal chain first, formula second
+Before showing any formula, explain the intuitive logic:
+- Price changes → "New bonds pay 6%. My bond pays 4%. Mine is worth less → price drops until buyer gets same 6% yield."
+- Premium/discount → "Compare bond's coupon to current market yield for similar bonds. Coupon > yield? Premium. Coupon < yield? Discount."
+- Duration → "Longer maturity = more sensitivity to rate changes because more future payments get re-discounted."
+- Convexity → "Price doesn't fall in a straight line. Falls slow down as rates rise (convex)."
+
+#### Rule 5: Practical context for every number
+When stating a number or range, explain what it means in practice:
+- "YTM 5%" → "If held to maturity and coupons reinvested at 5%, annualized return = 5%. But reinvestment at exact 5% is unlikely — this is a limitation."
+- "Duration 7.5 years" → "If rates rise 1%, bond price falls ~7.5%. Works for small changes only (convexity adjustment for large moves)."
+- "Investment grade BBB−" → "Lowest rung of IG. One downgrade → falls to HY ('fallen angel'). Many institutional mandates ban HY holdings → forced selling."
+
+#### Rule 6: Answer "how likely" questions explicitly
+Learners want to know what's normal vs rare:
+- "How often do coupons change?" → For fixed-rate bonds: never. For FRNs: resets periodically (e.g., 3-month SOFR + spread).
+- "How often do credit ratings change?" → Infrequent. Stable outlooks common. Negative watch before downgrade.
+- "How often yield curve inverts?" → Rare historically. Each inversion preceded recession (though not perfectly predictive).
+
+#### Rule 7: Common misconceptions section (1-2 per module)
+Each module must flag 1-2 specific misconceptions beginners hold:
+- "Higher coupon = better bond" → No. Higher coupon means more income up front, but lower price appreciation potential. Discount bonds have "built-in" price gain at maturity.
+- "YTM is guaranteed return" → No. Assumes reinvestment at same YTM — unrealistic if rates change.
+- "AAA bonds are risk-free" → No. Still subject to interest rate risk, inflation risk, liquidity risk. "Risk-free" ≈ government bonds in own currency.
 
 ## 4. Study Protocol
 
