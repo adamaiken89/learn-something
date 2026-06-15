@@ -15,6 +15,10 @@ Language: [en/zh/yue]
 
 [Clear definition + explanation]
 
+> **Think**: [Question that challenges learner on concept just introduced]
+>
+> *Answer: [Brief explanation so learner can self-check]*
+
 > Formula: `[relevant formula]`
 
 Example:
@@ -26,9 +30,17 @@ Example:
 
 [Extended explanation, edge cases, common pitfalls]
 
+> **Think**: [Question probing edge case or common mistake]
+>
+> *Answer: [Explanation resolving the question]*
+
 ### [Section 3]
 
 [Application in learner's domain]
+
+> **Think**: [Question connecting concept to practical scenario]
+>
+> *Answer: [How this plays out in real work]*
 
 ---
 
