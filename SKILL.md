@@ -195,6 +195,8 @@ Extract MCQs → SM-2 deck
 
 ## 6. Cost Model
 
+Powered by **DeepSeek V4 Flash**.
+
 | Phase | Cost |
 |-------|------|
 | Scope + syllabus | ~$0.01 |

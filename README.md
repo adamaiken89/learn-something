@@ -63,6 +63,8 @@ subjects/<topic>/
 
 ## Cost Model
 
+Powered by **DeepSeek V4 Flash**.
+
 | Phase | Cost |
 |-------|------|
 | Scope + syllabus | ~$0.01 |

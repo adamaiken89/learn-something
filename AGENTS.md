@@ -82,7 +82,7 @@ Bash CLI. Key subsystems:
 ## Modification Rules
 
 1. **Keep pedagogy alignment**: Any new feature must fit Marva Collins (rigor/repetition), Feynman (explain-simply), or Desirable Difficulties (spacing/interleaving). Tag new features with which theory they serve.
-2. **Keep cost model**: Content creation stays ~$0.10/course max. Study sessions stay $0.
+2. **Keep cost model**: Powered by DeepSeek V4 Flash. Content creation stays ~$0.10/course max. Study sessions stay $0.
 3. **Keep time budgets**: Module ≤ 3h. Subject ≤ 40h.
 4. **Keep SM-2 correct**: Interval progression and ease factor formula are standard SM-2. Do not change without testing against known SM-2 implementations.
 5. **Keep trigger behavior**: On trigger, enter content creation mode immediately — never generate full course in one shot unless user explicitly asks.
