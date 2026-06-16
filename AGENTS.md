@@ -10,7 +10,8 @@ learn-anything/
 ├── LICENSE            # MIT
 ├── AGENTS.md          # This file — agent modification guide
 ├── scripts/
-│   └── learn.sh       # CLI entrypoint (bash, SM-2, quiz engine)
+│   ├── learn.sh       # CLI entrypoint (bash, SM-2, quiz engine, EPUB)
+│   └── epubgen.py     # Zero-dep EPUB 3 generator (markdown→EPUB)
 └── templates/
     ├── syllabus.yaml  # 20-module course skeleton
     ├── module.md      # Lesson structure with Feynman/reframe/drill sections
@@ -53,10 +54,13 @@ Bash CLI. Key subsystems:
 | Function | Lines | Purpose |
 |----------|-------|---------|
 | `cmd_init` | 32-43 | Create subject directory, copy syllabus template |
-| `cmd_quiz` | 74-171 | Parse YAML, shuffle, display MCQs, update SRS deck |
-| `cmd_review` | 173-263 | SM-2 algorithm: due cards, scoring, interval calc |
-| `cmd_stats` | 265-305 | Show card counts, due today, mastery rate, avg ease |
-| `cmd_export` | 340-370 | Export deck to CSV for Anki import |
+| `cmd_start` | 52-84 | Show subject overview + module list |
+| `cmd_quiz` | 86-183 | Parse YAML, shuffle, display MCQs, update SRS deck |
+| `cmd_review` | 185-275 | SM-2 algorithm: due cards, scoring, interval calc |
+| `cmd_stats` | 277-317 | Show card counts, due today, mastery rate, avg ease |
+| `cmd_explain` | 319-350 | Feynman technique prompt with gap detection guide |
+| `cmd_export` | 352-381 | Export deck to CSV for Anki import |
+| `cmd_epub` | 384-466 | Generate EPUB book from all modules + quizzes |
 
 #### SM-2 Algorithm (cmd_review, lines 231-256)
 

@@ -19,7 +19,7 @@ Structured learning framework for any subject — study via CLI with spaced repe
 ## CLI Commands
 
 ```
-learn.sh init <subject>          Create new subject skeleton
+learn.sh init <subject> [lang]   Create new subject (en|zh|yue)
 learn.sh start <subject>         Show overview + modules
 learn.sh quiz <subject> <mod>    MCQ drill
 learn.sh explain <subject> <mod> Feynman technique prompt
@@ -27,6 +27,7 @@ learn.sh feynman <subject> <mod> Alias for explain
 learn.sh review <subject>        SM-2 spaced repetition
 learn.sh stats <subject>         Progress + retention
 learn.sh export <subject>        Anki CSV export
+learn.sh epub <subject> [file]   Export course to EPUB book
 ```
 
 ## Subject Structure
