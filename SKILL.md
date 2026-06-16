@@ -121,6 +121,7 @@ learn.sh explain <subject> <module>   # Feynman prompt guide
 learn.sh review <subject>             # SM-2 spaced repetition
 learn.sh stats <subject>              # Progress + retention
 learn.sh export <subject>             # Anki CSV export
+learn.sh epub <subject> [file]        # Export course to EPUB book
 ```
 
 ## 6. Cost Model (DeepSeek V4 Flash)
