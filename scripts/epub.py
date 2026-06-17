@@ -331,13 +331,17 @@ def fallback_parse(text):
             continue
 
         if s.startswith('#### '):
-            close_block(); result.append(f'<h4>{_inline_md(s[5:])}</h4>'); i += 1; continue
+            t = s[5:]; hid = _slugify(t)
+            close_block(); result.append(f'<h4 id="{hid}">{_inline_md(t)}</h4>'); i += 1; continue
         if s.startswith('### '):
-            close_block(); result.append(f'<h3>{_inline_md(s[4:])}</h3>'); i += 1; continue
+            t = s[4:]; hid = _slugify(t)
+            close_block(); result.append(f'<h3 id="{hid}">{_inline_md(t)}</h3>'); i += 1; continue
         if s.startswith('## '):
-            close_block(); result.append(f'<h2>{_inline_md(s[3:])}</h2>'); i += 1; continue
+            t = s[3:]; hid = _slugify(t)
+            close_block(); result.append(f'<h2 id="{hid}">{_inline_md(t)}</h2>'); i += 1; continue
         if s.startswith('# '):
-            close_block(); result.append(f'<h1>{_inline_md(s[2:])}</h1>'); i += 1; continue
+            t = s[2:]; hid = _slugify(t)
+            close_block(); result.append(f'<h1 id="{hid}">{_inline_md(t)}</h1>'); i += 1; continue
 
         if '|' in s and i + 1 < len(lines) and re.match(r'^[\s|:\-]+$', lines[i + 1].strip()):
             close_block()
@@ -524,6 +528,22 @@ def _highlight_html(html):
     return html
 
 
+# ── Title formatting + slugify ─────────────────────────────────
+
+def _format_title(name):
+    """Convert kebab-case or snake_case directory names to Title Case."""
+    name = re.sub(r'[-_]', ' ', name)
+    return name.strip().title()
+
+
+def _slugify(text):
+    """Convert heading text to HTML anchor ID."""
+    slug = text.lower()
+    slug = re.sub(r'[^\w\s-]', '', slug)
+    slug = re.sub(r'[-\s]+', '-', slug)
+    return slug.strip('-')
+
+
 # ── Chapter splitting ──────────────────────────────────────────
 
 def split_chapters(text):
@@ -589,6 +609,67 @@ def collect_subject_md(subject_dir):
     return '\n'.join(parts)
 
 
+# ── Hierarchical ToC navigation ────────────────────────────────
+
+def _extract_subheadings(content):
+    """Extract (level, title, slug) for h2/h3 within chapter content."""
+    items = []
+    for line in content.split('\n'):
+        s = line.strip()
+        if s.startswith('## '):
+            t = s[3:].strip()
+            items.append((2, t, _slugify(t)))
+        elif s.startswith('### '):
+            t = s[4:].strip()
+            items.append((3, t, _slugify(t)))
+    return items
+
+
+def _build_hierarchical_toc(chapters):
+    """Build nested (title, href, children) tree from chapters + sub-headings."""
+    tree = []
+    stack = [(0, tree)]
+
+    for ch_idx, (ch_title, ch_content) in enumerate(chapters, 1):
+        ch_file = f'ch{ch_idx:03d}.xhtml'
+        h1_href = ch_file
+        h1_node = (ch_title, h1_href, [])
+        h1_level = 1
+
+        while stack and stack[-1][0] >= h1_level:
+            stack.pop()
+        if stack:
+            stack[-1][1].append(h1_node)
+        stack.append((h1_level, h1_node[2]))
+
+        for sub_level, sub_title, sub_slug in _extract_subheadings(ch_content):
+            href = f'{ch_file}#{sub_slug}'
+            node = (sub_title, href, [])
+
+            while stack and stack[-1][0] >= sub_level:
+                stack.pop()
+            if stack:
+                stack[-1][1].append(node)
+            stack.append((sub_level, node[2]))
+
+    return tree
+
+
+def _render_toc_nav(tree, depth=0):
+    """Render nested heading tree as <ol> HTML."""
+    if not tree:
+        return ''
+    indent = '  ' * depth
+    parts = [f'{indent}<ol>']
+    for title, href, children in tree:
+        parts.append(f'{indent}  <li><a href="{escape(href)}">{escape(title)}</a>')
+        if children:
+            parts.append(_render_toc_nav(children, depth + 2))
+        parts.append(f'{indent}  </li>')
+    parts.append(f'{indent}</ol>')
+    return '\n'.join(parts)
+
+
 # ── EPUB generation ────────────────────────────────────────────
 
 def generate_epub(chapters, output_path, title, author='Learn Anything'):
@@ -602,7 +683,6 @@ def generate_epub(chapters, output_path, title, author='Learn Anything'):
     xhtml_files = {}
     manifest = []
     spine = []
-    nav_items = []
 
     cover_html = f'''<?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE html>
@@ -633,28 +713,29 @@ def generate_epub(chapters, output_path, title, author='Learn Anything'):
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head><title>{escape(ch_title)}</title><link rel="stylesheet" type="text/css" href="style.css"/></head>
 <body>
-<h1>{escape(ch_title)}</h1>
+<h1 id="{_slugify(ch_title)}">{escape(ch_title)}</h1>
 {html_content}
 </body></html>'''
         xhtml_files[filename] = page
         manifest.append((filename, 'application/xhtml+xml', pid))
         spine.append((pid, True))
-        nav_items.append((filename, ch_title))
 
     spine.append(('nav', False))
 
-    nav_html = '''<?xml version="1.0" encoding="utf-8"?>
+    toc_tree = _build_hierarchical_toc(chapters)
+    toc_nav_body = _render_toc_nav(toc_tree) if toc_tree else '<ol>\n</ol>'
+
+    nav_html = f'''<?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
 <head><title>Table of Contents</title></head>
 <body>
 <nav epub:type="toc">
 <h1>Table of Contents</h1>
-<ol>
-'''
-    for fname, ch_title in nav_items:
-        nav_html += f'<li><a href="{fname}">{escape(ch_title)}</a></li>\n'
-    nav_html += '</ol>\n</nav>\n</body>\n</html>'
+{toc_nav_body}
+</nav>
+</body>
+</html>'''
     xhtml_files['nav.xhtml'] = nav_html
     manifest.append(('nav.xhtml', 'application/xhtml+xml', 'nav'))
 
@@ -872,7 +953,7 @@ def main():
         if not os.path.isdir(subject_dir):
             print(f"Subject directory not found: {subject_dir}", file=sys.stderr)
             sys.exit(1)
-        title = args.title or os.path.basename(os.path.normpath(subject_dir))
+        title = args.title or _format_title(os.path.basename(os.path.normpath(subject_dir)))
         author = args.author
         md_text = collect_subject_md(subject_dir)
         book_md = os.path.join(subject_dir, 'book.md')
@@ -884,7 +965,7 @@ def main():
         if not os.path.isfile(md_file):
             print(f"Markdown file not found: {md_file}", file=sys.stderr)
             sys.exit(1)
-        title = args.title or os.path.splitext(os.path.basename(md_file))[0]
+        title = args.title or _format_title(os.path.splitext(os.path.basename(md_file))[0])
         author = args.author
         with open(md_file, 'r', encoding='utf-8') as f:
             md_text = f.read()
