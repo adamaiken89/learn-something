@@ -12,7 +12,6 @@ Usage:
 import argparse
 import os
 import re
-import shutil
 import subprocess
 import sys
 import textwrap
@@ -221,8 +220,9 @@ class RawPDF:
     PAGE_WRITE = PAGE_W - MARGIN_L - MARGIN_R
     CHARS_PER_LINE = 72
 
-    def __init__(self, title='Document'):
+    def __init__(self, title='Document', author='Learn Anything'):
         self.title = title
+        self.author = author
         self.objs = []
         self.pages = []
         self.font_helv = None
@@ -262,7 +262,7 @@ class RawPDF:
                 lines.append(f'({_escape_pdf(txt)}) Tj')
             elif kind == 'title':
                 _, x, y, txt = it
-                lines.append(f'/F2 20 Tf')
+                lines.append('/F2 20 Tf')
                 lines.append(f'1 0 0 1 {x:.0f} {y:.0f} Tm')
                 lines.append(f'({_escape_pdf(txt)}) Tj')
         lines.append('ET')
@@ -302,8 +302,9 @@ class RawPDF:
             f'<< /Type /Pages /Kids [{kids}] /Count {len(self.pages)} >>'
         )
 
-        info_id = self._obj(
+        self._obj(
             f'<< /Title ({_escape_pdf(self.title)})'
+            f' /Author ({_escape_pdf(self.author)})'
             f' /Producer (Learn Anything)'
             f' /CreationDate ({datetime.now().strftime("%Y%m%d%H%M%S")}) >>'
         )
@@ -317,10 +318,12 @@ class RawPDF:
 
     def _add_cover_page(self):
         title = self.title[:60]
+        author = self.author[:60]
         x = self.MARGIN_L
         y = self.PAGE_H // 2 + 40
         self._render_page([
             ('title', x, y, title),
+            ('text', x, y - 30, f'by {author}', 1),
         ])
 
     def _add_content_pages(self, text_lines):
@@ -328,7 +331,6 @@ class RawPDF:
         y = self.PAGE_H - self.MARGIN_T
         max_y = self.MARGIN_B
         page_items = []
-        first_page = False
 
         def flush():
             nonlocal page_items, y
@@ -370,9 +372,9 @@ class RawPDF:
         if page_items:
             self._render_page(page_items)
 
-def _generate_raw_pdf(md_text, output_path, title='Document'):
+def _generate_raw_pdf(md_text, output_path, title='Document', author='Learn Anything'):
     plain_lines = _md_to_plain_lines(md_text)
-    pdf = RawPDF(title=title)
+    pdf = RawPDF(title=title, author=author)
     data = pdf.build(plain_lines)
     with open(output_path, 'wb') as f:
         f.write(data.encode('latin-1'))
@@ -395,11 +397,12 @@ def _html_to_pdf_via_pandoc(html, output_path):
         raise RuntimeError(f'pandoc failed: {p.stderr}')
 
 
-def _make_html(md_text, title='Document'):
+def _make_html(md_text, title='Document', author='Learn Anything'):
     lines = []
     lines.append('<!DOCTYPE html>')
     lines.append('<html><head>')
     lines.append(f'<meta charset="utf-8"><title>{html_escape(title)}</title>')
+    lines.append(f'<meta name="author" content="{html_escape(author)}">')
     lines.append('<style>')
     lines.append('body { font-family: Georgia, serif; max-width: 38em; margin: 2em auto; '
                  'line-height: 1.7; color: #333; padding: 0 1em; }')
@@ -478,7 +481,7 @@ def _make_html(md_text, title='Document'):
     return '\n'.join(lines)
 
 
-def generate_pdf(md_text, output_path, title='Document', engine='auto'):
+def generate_pdf(md_text, output_path, title='Document', author='Learn Anything', engine='auto'):
     os.makedirs(os.path.dirname(os.path.abspath(output_path)) or '.', exist_ok=True)
 
     if engine == 'auto':
@@ -490,21 +493,21 @@ def generate_pdf(md_text, output_path, title='Document', engine='auto'):
             engine = 'raw'
 
     if engine == 'weasyprint' and HAS_WEASYPRINT:
-        html = _make_html(md_text, title)
-        print(f'Rendering with weasyprint...', file=sys.stderr)
+        html = _make_html(md_text, title, author)
+        print('Rendering with weasyprint...', file=sys.stderr)
         _html_to_pdf_via_weasyprint(html, output_path)
         print(f'PDF (weasyprint): {output_path}', file=sys.stderr)
         return
 
     if engine == 'pandoc' and HAS_PANDOC:
-        html = _make_html(md_text, title)
-        print(f'Rendering with pandoc...', file=sys.stderr)
+        html = _make_html(md_text, title, author)
+        print('Rendering with pandoc...', file=sys.stderr)
         _html_to_pdf_via_pandoc(html, output_path)
         print(f'PDF (pandoc): {output_path}', file=sys.stderr)
         return
 
-    print(f'Rendering with stdlib (text-only PDF)...', file=sys.stderr)
-    _generate_raw_pdf(md_text, output_path, title)
+    print('Rendering with stdlib (text-only PDF)...', file=sys.stderr)
+    _generate_raw_pdf(md_text, output_path, title, author)
     print(f'PDF (stdlib): {output_path}', file=sys.stderr)
 
 
@@ -551,6 +554,7 @@ def main():
             print(f'Subject directory not found: {subject_dir}', file=sys.stderr)
             sys.exit(1)
         title = args.title or _format_title(os.path.basename(os.path.normpath(subject_dir)))
+        author = args.author
         md_text = collect_subject_md(subject_dir)
         book_md = os.path.join(subject_dir, 'book.md')
         with open(book_md, 'w', encoding='utf-8') as f:
@@ -562,11 +566,12 @@ def main():
             print(f'Markdown file not found: {md_file}', file=sys.stderr)
             sys.exit(1)
         title = args.title or _format_title(os.path.splitext(os.path.basename(md_file))[0])
+        author = args.author
         with open(md_file, 'r', encoding='utf-8') as f:
             md_text = f.read()
 
     output = args.output
-    generate_pdf(md_text, output, title, engine=args.engine)
+    generate_pdf(md_text, output, title, author, engine=args.engine)
     size_kb = os.path.getsize(output) / 1024
     print(f'PDF: {output} ({size_kb:.1f} KB)')
 

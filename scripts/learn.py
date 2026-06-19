@@ -625,10 +625,19 @@ def cmd_epub(args):
         sys.exit(1)
 
 
+def _pdf_extra_args(args):
+    cmd = []
+    if args.title:
+        cmd.extend(['--title', args.title])
+    if args.author:
+        cmd.extend(['--author', args.author])
+    cmd.extend(['--engine', args.engine])
+    return cmd
+
+
 def cmd_pdf(args):
     subject = args.subject
     output = args.output
-    engine = args.engine
 
     _check_subject(subject)
     spath = _subject_path(subject)
@@ -642,8 +651,8 @@ def cmd_pdf(args):
         sys.exit(1)
 
     print(f'{CYAN}Building PDF: {subject}{NC}')
-    result = subprocess.run(
-        [sys.executable, str(pdf_script), 'build', str(spath), output, '--engine', engine],
+    cmd = [sys.executable, str(pdf_script), 'build', str(spath), output] + _pdf_extra_args(args)
+    result = subprocess.run(cmd,
         capture_output=True,
         text=True,
     )
@@ -662,7 +671,6 @@ def cmd_pdf(args):
 def cmd_pdf_regen(args):
     subject = args.subject
     output = args.output
-    engine = args.engine
 
     _check_subject(subject)
     spath = _subject_path(subject)
@@ -681,8 +689,8 @@ def cmd_pdf_regen(args):
         sys.exit(1)
 
     print(f'{CYAN}Regenerating PDF from cached markdown: {subject}{NC}')
-    result = subprocess.run(
-        [sys.executable, str(pdf_script), 'from-md', str(book_md), output, '--engine', engine],
+    cmd = [sys.executable, str(pdf_script), 'from-md', str(book_md), output] + _pdf_extra_args(args)
+    result = subprocess.run(cmd,
         capture_output=True,
         text=True,
     )
@@ -857,6 +865,8 @@ Commands:
     p = sub.add_parser('pdf', help='Export course to PDF')
     p.add_argument('subject')
     p.add_argument('output', nargs='?', default=None)
+    p.add_argument('--title', default=None, help='PDF title (default: subject dir name)')
+    p.add_argument('--author', default='Learn Anything', help='PDF author')
     p.add_argument(
         '--engine',
         default='auto',
@@ -867,6 +877,8 @@ Commands:
     p = sub.add_parser('pdf-regen', help='Regenerate PDF from cached book.md')
     p.add_argument('subject')
     p.add_argument('output', nargs='?', default=None)
+    p.add_argument('--title', default=None, help='PDF title (default: subject dir name)')
+    p.add_argument('--author', default='Learn Anything', help='PDF author')
     p.add_argument(
         '--engine',
         default='auto',
