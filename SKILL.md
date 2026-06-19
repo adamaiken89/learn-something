@@ -155,12 +155,14 @@ learn.sh pdf-regen <subject> [file] [--engine]  # Regenerate PDF from cached boo
 2. Run `learn.sh epub <subject>` or `learn.sh epub-regen <subject> [file]`
    - `epub`: assembles subject dir (lesson.md + quiz.yaml per module) → `book.md` → EPUB
    - `epub-regen`: rebuild EPUB from existing `book.md` (skip assembly, faster after edits)
+   - `--description "text"` adds cover page description
 3. Validate: `learn.sh epub-verify <subject> [file]`
-4. Underlying script: `epub.py build <subject-dir> <output> [--title TITLE] [--author AUTHOR]`
+4. Underlying script: `epub.py build <subject-dir> <output> [--title TITLE] [--author AUTHOR] [--description DESC]`
    - Also: `epub.py from-md <markdown-file> <output>` for custom markdown
    - Zero-dep fallback parser or optional `markdown` + `pygments` for GFM tables + syntax highlighting
    - Mermaid diagrams rendered to SVG via mermaid.ink API (default) or local mmdc CLI (`--mermaid local`)
-   - Generates valid EPUB 3 (cover, nav, spine, manifest, XHTML content, SVG diagrams)
+   - Generates valid EPUB 3 (cover SVG, nav, spine, manifest, XHTML content, SVG diagrams)
+   - Cover: procedural SVG generated from title hash (8 color palettes, 4 pattern types). Deterministic, zero-dep.
 
 ### PDF generation workflow
 

@@ -2,6 +2,7 @@
 
 Est. study time: [X]h
 Language: [en/zh/yue]
+Description: [Optional short description for cover generation]
 
 ## Learning Objectives (maps to course CILOs)
 - [Objective 1 — serves CILO #N]

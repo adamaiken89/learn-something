@@ -14,8 +14,11 @@ Usage:
 
 import argparse
 import base64
+import hashlib
 import html.parser
+import math
 import os
+import random
 import re
 import shutil
 import subprocess
@@ -728,6 +731,142 @@ def _process_mermaid_blocks(html, mode, tmp_dir):
     return html, svg_files
 
 
+# ── Procedural SVG cover generation ───────────────────────────
+
+COVER_PALETTES = [
+    {'bg': '#1a1a2e', 'primary': '#e94560', 'secondary': '#0f3460', 'accent': '#16213e', 'text': '#eee'},
+    {'bg': '#0d1117', 'primary': '#58a6ff', 'secondary': '#1f6feb', 'accent': '#388bfd', 'text': '#f0f6fc'},
+    {'bg': '#1b1b2f', 'primary': '#e43f5a', 'secondary': '#162447', 'accent': '#1f4068', 'text': '#eaeaea'},
+    {'bg': '#0b0c10', 'primary': '#66fcf1', 'secondary': '#45a29e', 'accent': '#c5c6c7', 'text': '#f0f0f0'},
+    {'bg': '#2d132c', 'primary': '#ee4540', 'secondary': '#c72c41', 'accent': '#801336', 'text': '#f5f5f5'},
+    {'bg': '#1a1a2e', 'primary': '#e94560', 'secondary': '#533483', 'accent': '#0f3460', 'text': '#eee'},
+    {'bg': '#0a0a0a', 'primary': '#ff6b35', 'secondary': '#004e89', 'accent': '#1a659e', 'text': '#f7f7f7'},
+    {'bg': '#16161a', 'primary': '#7f5af0', 'secondary': '#2cb67d', 'accent': '#e16162', 'text': '#fffffe'},
+]
+
+
+def _title_hash(title):
+    h = hashlib.sha256(title.encode('utf-8')).hexdigest()
+    return int(h[:8], 16)
+
+
+def _pick_palette(title):
+    idx = _title_hash(title) % len(COVER_PALETTES)
+    return COVER_PALETTES[idx]
+
+
+def _svg_text_width(text, font_size):
+    return len(text) * font_size * 0.55
+
+
+def _wrap_text(text, max_width, font_size):
+    words = text.split()
+    lines = []
+    current = []
+    for word in words:
+        test = ' '.join(current + [word])
+        if _svg_text_width(test, font_size) > max_width and current:
+            lines.append(' '.join(current))
+            current = [word]
+        else:
+            current.append(word)
+    if current:
+        lines.append(' '.join(current))
+    return lines
+
+
+def generate_cover_svg(title, author='', description=''):
+    pal = _pick_palette(title)
+    rng = random.Random(_title_hash(title))
+
+    W, H = 1200, 800
+    svg_parts = []
+
+    svg_parts.append(f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}" height="{H}">')
+    svg_parts.append(f'<rect width="{W}" height="{H}" fill="{pal["bg"]}"/>')
+
+    pattern_type = _title_hash(title) % 4
+
+    if pattern_type == 0:
+        for _ in range(60):
+            cx = rng.randint(0, W)
+            cy = rng.randint(0, H)
+            r = rng.randint(20, 120)
+            opacity = rng.uniform(0.05, 0.15)
+            color = pal['primary'] if rng.random() > 0.5 else pal['secondary']
+            svg_parts.append(f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="{color}" opacity="{opacity}"/>')
+    elif pattern_type == 1:
+        for i in range(12):
+            y = 60 + i * 65
+            amplitude = rng.randint(15, 40)
+            freq = rng.uniform(0.003, 0.008)
+            points = []
+            for x in range(0, W + 20, 10):
+                dy = y + math.sin(x * freq + i * 0.7) * amplitude
+                points.append(f'{x},{dy:.1f}')
+            opacity = rng.uniform(0.06, 0.18)
+            color = pal['primary'] if i % 3 == 0 else pal['secondary']
+            svg_parts.append(f'<polyline points="{" ".join(points)}" fill="none" stroke="{color}" stroke-width="2" opacity="{opacity}"/>')
+    elif pattern_type == 2:
+        for _ in range(8):
+            x1 = rng.randint(-100, W + 100)
+            y1 = rng.randint(-100, H + 100)
+            x2 = rng.randint(-100, W + 100)
+            y2 = rng.randint(-100, H + 100)
+            color = pal['primary'] if rng.random() > 0.4 else pal['secondary']
+            opacity = rng.uniform(0.04, 0.12)
+            svg_parts.append(f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{color}" stroke-width="{rng.randint(1, 4)}" opacity="{opacity}"/>')
+        for _ in range(25):
+            cx = rng.randint(0, W)
+            cy = rng.randint(0, H)
+            r = rng.randint(3, 8)
+            svg_parts.append(f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="{pal["accent"]}" opacity="0.3"/>')
+    else:
+        cols = rng.randint(8, 14)
+        rows = rng.randint(6, 10)
+        cell_w = W // cols
+        cell_h = H // rows
+        for r in range(rows):
+            for c in range(cols):
+                if rng.random() > 0.6:
+                    x = c * cell_w + cell_w // 2
+                    y = r * cell_h + cell_h // 2
+                    sz = rng.randint(cell_w // 4, cell_w // 2)
+                    color = pal['primary'] if (r + c) % 3 == 0 else pal['secondary']
+                    opacity = rng.uniform(0.04, 0.14)
+                    if rng.random() > 0.5:
+                        svg_parts.append(f'<rect x="{x - sz // 2}" y="{y - sz // 2}" width="{sz}" height="{sz}" fill="{color}" opacity="{opacity}" rx="4"/>')
+                    else:
+                        svg_parts.append(f'<circle cx="{x}" cy="{y}" r="{sz // 2}" fill="{color}" opacity="{opacity}"/>')
+
+    overlay_y = H * 0.35
+    svg_parts.append(f'<rect x="0" y="{overlay_y - 20}" width="{W}" height="{H - overlay_y + 20}" fill="{pal["bg"]}" opacity="0.75"/>')
+
+    accent_line_y = overlay_y
+    svg_parts.append(f'<rect x="100" y="{accent_line_y}" width="80" height="4" fill="{pal["primary"]}" rx="2"/>')
+
+    title_font = 54
+    title_x = 100
+    title_y = accent_line_y + 60
+    title_lines = _wrap_text(title.upper(), W - 200, title_font)
+    for i, line in enumerate(title_lines):
+        svg_parts.append(f'<text x="{title_x}" y="{title_y + i * 65}" font-family="Georgia, serif" font-size="{title_font}" font-weight="bold" fill="{pal["text"]}">{escape(line)}</text>')
+
+    desc_font = 22
+    desc_y = title_y + len(title_lines) * 65 + 20
+    if description:
+        desc_lines = _wrap_text(description, W - 200, desc_font)
+        for i, line in enumerate(desc_lines[:3]):
+            svg_parts.append(f'<text x="{title_x}" y="{desc_y + i * 30}" font-family="Georgia, serif" font-size="{desc_font}" fill="{pal["text"]}" opacity="0.7">{escape(line)}</text>')
+        desc_y += len(desc_lines[:3]) * 30 + 10
+
+    if author:
+        svg_parts.append(f'<text x="{title_x}" y="{H - 60}" font-family="Arial, sans-serif" font-size="18" fill="{pal["text"]}" opacity="0.5">{escape(author)}</text>')
+
+    svg_parts.append('</svg>')
+    return '\n'.join(svg_parts)
+
+
 # ── Title formatting + slugify ─────────────────────────────────
 
 
@@ -881,7 +1020,7 @@ def _render_toc_nav(tree, depth=0):
 # ── EPUB generation ────────────────────────────────────────────
 
 
-def generate_epub(chapters, output_path, title, author='Learn Anything', mermaid_mode='api'):
+def generate_epub(chapters, output_path, title, author='Learn Anything', mermaid_mode='api', description=''):
     uid = str(uuid.uuid4())
     now = datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
     css = make_css(use_pygments=HAS_PYGMENTS)
@@ -896,17 +1035,10 @@ def generate_epub(chapters, output_path, title, author='Learn Anything', mermaid
 
     tmp_dir = tempfile.mkdtemp(prefix='opencode-mermaid-')
 
-    cover_html = f"""<?xml version="1.0" encoding="utf-8"?>
-<!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml">
-<head><title>{escape(title)}</title><link rel="stylesheet" type="text/css" href="style.css"/></head>
-<body class="cover">
-<h1>{escape(title)}</h1>
-<p>Generated by Learn Anything — {datetime.now().strftime('%Y-%m-%d')}</p>
-</body></html>"""
-    xhtml_files['cover.xhtml'] = cover_html
-    manifest.append(('cover.xhtml', 'application/xhtml+xml', 'cover'))
-    spine.append(('cover', True))
+    cover_svg = generate_cover_svg(title, author, description)
+    xhtml_files['cover.xhtml'] = cover_svg
+    manifest.append(('cover.xhtml', 'image/svg+xml', 'cover-image'))
+    spine.append(('cover-image', True))
 
     for idx, (ch_title, content) in enumerate(chapters, 1):
         if HAS_MARKDOWN:
@@ -971,6 +1103,7 @@ def generate_epub(chapters, output_path, title, author='Learn Anything', mermaid
 <dc:creator>{escape(author)}</dc:creator>
 <dc:date>{escape(now)}</dc:date>
 <meta property="dcterms:modified">{escape(now)}</meta>
+<meta name="cover" content="cover-image"/>
 </metadata>
 <manifest>
 {opf_manifest}</manifest>
@@ -1135,6 +1268,7 @@ def main():
     p_build.add_argument('output')
     p_build.add_argument('--title', default=None)
     p_build.add_argument('--author', default='Learn Anything')
+    p_build.add_argument('--description', default='', help='Cover page description')
     p_build.add_argument(
         '--mermaid',
         default=MERMAID_DEFAULT_MODE,
@@ -1150,6 +1284,7 @@ def main():
     p_md.add_argument('output')
     p_md.add_argument('--title', default=None)
     p_md.add_argument('--author', default='Learn Anything')
+    p_md.add_argument('--description', default='', help='Cover page description')
     p_md.add_argument(
         '--mermaid',
         default=MERMAID_DEFAULT_MODE,
@@ -1193,6 +1328,7 @@ def main():
             sys.exit(1)
         title = args.title or _format_title(os.path.basename(os.path.normpath(subject_dir)))
         author = args.author
+        description = args.description
         md_text = collect_subject_md(subject_dir)
         book_md = os.path.join(subject_dir, 'book.md')
         with open(book_md, 'w', encoding='utf-8') as f:
@@ -1205,6 +1341,7 @@ def main():
             sys.exit(1)
         title = args.title or _format_title(os.path.splitext(os.path.basename(md_file))[0])
         author = args.author
+        description = args.description
         with open(md_file, 'r', encoding='utf-8') as f:
             md_text = f.read()
 
@@ -1212,7 +1349,7 @@ def main():
     chapters = split_chapters(md_text)
     if not chapters:
         chapters = [(title, md_text)]
-    generate_epub(chapters, output, title, author, mermaid_mode=args.mermaid)
+    generate_epub(chapters, output, title, author, mermaid_mode=args.mermaid, description=description)
     size_kb = os.path.getsize(output) / 1024
     print(f'EPUB: {output} ({len(chapters)} chapters, {size_kb:.1f} KB)')
 

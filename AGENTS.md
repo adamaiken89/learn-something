@@ -142,6 +142,18 @@ Apply all 8 rules to every generated module. If content violates any rule, rewri
 - SKILL.md: §3 content principles + quality rules, §5 CLI, §7 Integration updated.
 - module.md: optional ```mermaid slot after concept definition.
 
+### SVG Cover Generation (added 2026-06)
+
+- **epub.py**: `generate_cover_svg(title, author, description)` function (~100 lines)
+- Zero dependencies — uses `hashlib`, `math`, `random` from stdlib.
+- Deterministic from title: SHA256 hash → palette selection (8 dark-theme palettes), pattern type (4: circles, sine waves, radial, grid).
+- Cover layout: 1200×800 SVG, accent line, uppercase wrapped title, description (3 lines max, 70% opacity), author at bottom.
+- Stored as `cover.xhtml` in EPUB with `image/svg+xml` media type.
+- OPF: `<meta name="cover" content="cover-image"/>`.
+- CLI flags: `--description` on `build`/`from-md` (epub.py) and `epub`/`epub-regen` (learn.py).
+- learn.py passes `--description` through to epub.py subprocess.
+- SKILL.md §5 documents flag. AGENTS.md documents here.
+
 ## Testing
 
 ```bash

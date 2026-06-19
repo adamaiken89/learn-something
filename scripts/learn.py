@@ -595,6 +595,7 @@ def cmd_epub(args):
     subject = args.subject
     output = args.output
     mermaid = args.mermaid
+    description = args.description
 
     _check_subject(subject)
     spath = _subject_path(subject)
@@ -607,12 +608,12 @@ def cmd_epub(args):
         print(f'{RED}epub.py not found at {epub_script}{NC}')
         sys.exit(1)
 
+    cmd = [sys.executable, str(epub_script), 'build', str(spath), output, '--mermaid', mermaid]
+    if description:
+        cmd.extend(['--description', description])
+
     print(f'{CYAN}Building EPUB: {subject}{NC}')
-    result = subprocess.run(
-        [sys.executable, str(epub_script), 'build', str(spath), output, '--mermaid', mermaid],
-        capture_output=True,
-        text=True,
-    )
+    result = subprocess.run(cmd, capture_output=True, text=True)
     print(result.stdout, end='')
     if result.stderr:
         print(result.stderr, file=sys.stderr, end='')
@@ -712,6 +713,7 @@ def cmd_epub_regen(args):
     subject = args.subject
     output = args.output
     mermaid = args.mermaid
+    description = args.description
 
     _check_subject(subject)
     spath = _subject_path(subject)
@@ -729,12 +731,12 @@ def cmd_epub_regen(args):
         print(f'{RED}epub.py not found at {epub_script}{NC}')
         sys.exit(1)
 
+    cmd = [sys.executable, str(epub_script), 'from-md', str(book_md), output, '--mermaid', mermaid]
+    if description:
+        cmd.extend(['--description', description])
+
     print(f'{CYAN}Regenerating EPUB from cached markdown: {subject}{NC}')
-    result = subprocess.run(
-        [sys.executable, str(epub_script), 'from-md', str(book_md), output, '--mermaid', mermaid],
-        capture_output=True,
-        text=True,
-    )
+    result = subprocess.run(cmd, capture_output=True, text=True)
     print(result.stdout, end='')
     if result.stderr:
         print(result.stderr, file=sys.stderr, end='')
@@ -843,6 +845,7 @@ Commands:
     p = sub.add_parser('epub', help='Export course to EPUB')
     p.add_argument('subject')
     p.add_argument('output', nargs='?', default=None)
+    p.add_argument('--description', default='', help='Cover page description')
     p.add_argument(
         '--mermaid',
         default='api',
@@ -853,6 +856,7 @@ Commands:
     p = sub.add_parser('epub-regen', help='Regenerate EPUB from cached book.md')
     p.add_argument('subject')
     p.add_argument('output', nargs='?', default=None)
+    p.add_argument('--description', default='', help='Cover page description')
     p.add_argument(
         '--mermaid',
         default='api',
