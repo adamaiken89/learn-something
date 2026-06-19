@@ -85,6 +85,13 @@ print('OK')
 "
 echo "  epub ToC structure: OK"
 
+# --- test: epub build with --mermaid off ---
+echo -n "  epub build --mermaid off ... "
+"$SKILL_DIR/scripts/learn.sh" epub "$TEST_SUBJECT" --mermaid off > /dev/null 2>&1
+[ -f "$EPUB_OUT" ] || { echo "FAIL: epub not created"; exit 1; }
+python3 "$SKILL_DIR/scripts/epub.py" verify "$EPUB_OUT" 2>&1 | grep -q "VALID" || { echo "FAIL: verify failed"; exit 1; }
+echo "OK"
+
 # --- test: epub size ---
 echo -n "  epub non-empty ... "
 SIZE=$(stat -f%z "$EPUB_OUT" 2>/dev/null || stat -c%s "$EPUB_OUT" 2>/dev/null)

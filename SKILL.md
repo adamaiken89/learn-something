@@ -77,8 +77,9 @@ Full templates in `templates/`. Key: syllabus.yaml (20-module skeleton), module.
 - **Progression**: Build on prerequisites. Earlier modules foundational.
 - **Skip permitted**: Learner gives sparse input? Generate content anyway with sensible defaults. Do not block.
 - **Socratic throughout**: Every major concept is followed by a question that makes learner stop and think — not at end of module only, but inline after each new idea. Question → brief answer/explanation immediately after so learner can self-check. Pattern: state concept → ask "why?" or "what if?" → answer.
+- **Mermaid diagrams**: For concepts with branching logic, state machines, workflows, or causal chains: generate Mermaid flowchart/sequence/state diagram. Place after concept explanation, before **Think** question.
 
-### Content quality rules (7)
+### Content quality rules (9)
 
 | # | Rule | What to do | Bad example → Good example |
 |---|------|------------|----------------------------|
@@ -89,6 +90,8 @@ Full templates in `templates/`. Key: syllabus.yaml (20-module skeleton), module.
 | 5 | Practical context | Every number gets real meaning | "Duration 7.5" → "1% rate rise → ~7.5% price drop (small moves only; convexity adjustment for large)." |
 | 6 | "How likely" | Tell normal vs rare frequencies | Omit → "Yield curve inverts rarely. Each inversion preceded recession (~8mo). Not perfectly predictive." |
 | 7 | Common misconceptions | Flag 1-2 specific errors beginners hold | "Higher coupon = better bond" → "No. Discount bonds have built-in price gain at maturity (accretion)." |
+| 8 | Socratic throughout | Every concept section embeds **Think** question + immediate answer | Learner reads passively → forced to stop, process, self-check before proceeding |
+| 9 | Mermaid diagrams for complex concepts | If concept involves branching logic, state transitions, workflows, or causal chain with 3+ nodes: include ````mermaid` diagram. Prefer sequence, flowchart, or state diagram types. | "Bond amortization schedule explained in text only" → add ````mermaid\ngraph LR\nA[Issue] --> B[Coupon payments]\nB --> C[Principal at maturity]\n```` |
 
 ## 4. Study Protocol
 
@@ -116,14 +119,15 @@ Full templates in `templates/`. Key: syllabus.yaml (20-module skeleton), module.
 ```
 learn.sh init <subject> [lang]        # Create subject (en|zh|yue)
 learn.sh start <subject>              # Overview + module list
+learn.sh create-module <subject> <id> # Create module from template
 learn.sh quiz <subject> <module>      # MCQ drill
 learn.sh explain <subject> <module>   # Feynman prompt guide
 learn.sh review <subject>             # SM-2 spaced repetition
 learn.sh stats <subject>              # Progress + retention
 learn.sh export <subject>             # Anki CSV export
-learn.sh epub <subject> [file]        # Export course to EPUB book
-learn.sh epub-regen <subject> [file]  # Regenerate EPUB from cached markdown
-learn.sh epub-verify <subject> [file] # Validate EPUB structure
+learn.sh epub <subject> [file] [--local]        # Export course to EPUB book (--local: use mmdc CLI)
+learn.sh epub-regen <subject> [file] [--local]  # Regenerate EPUB from cached markdown
+learn.sh epub-verify <subject> [file]           # Validate EPUB structure
 ```
 
 ## 6. Cost Model (DeepSeek V4 Flash)
@@ -140,7 +144,7 @@ learn.sh epub-verify <subject> [file] # Validate EPUB structure
 - **Anki**: `learn.sh export` → CSV/APKG
 - **Obsidian/Notion**: Markdown imports directly
 - **Print**: Print lesson.md or quiz.yaml
-- **EPUB**: `learn.sh epub <subject>` generates EPUB 3 with hierarchical ToC, syntax highlighting, quizzes
+- **EPUB**: `learn.sh epub <subject>` generates EPUB 3 with hierarchical ToC, syntax highlighting, quizzes, Mermaid diagrams (mermaid.ink API by default, `--local` for offline mmdc CLI)
 
 ### EPUB generation workflow
 
@@ -152,7 +156,8 @@ learn.sh epub-verify <subject> [file] # Validate EPUB structure
 4. Underlying script: `epub.py build <subject-dir> <output> [--title TITLE] [--author AUTHOR]`
    - Also: `epub.py from-md <markdown-file> <output>` for custom markdown
    - Zero-dep fallback parser or optional `markdown` + `pygments` for GFM tables + syntax highlighting
-   - Generates valid EPUB 3 (cover, nav, spine, manifest, XHTML content)
+   - Mermaid diagrams rendered to SVG via mermaid.ink API (default) or local mmdc CLI (`--mermaid local`)
+   - Generates valid EPUB 3 (cover, nav, spine, manifest, XHTML content, SVG diagrams)
 
 ## 8. Trigger behavior
 

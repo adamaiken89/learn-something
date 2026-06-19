@@ -10,8 +10,9 @@ learn-anything/
 ├── LICENSE            # MIT
 ├── AGENTS.md          # This file — agent modification guide
 ├── scripts/
-│   ├── learn.sh       # CLI entrypoint (bash, SM-2, quiz engine, EPUB)
-│   └── epubgen.py     # Zero-dep EPUB 3 generator (markdown→EPUB)
+│   ├── learn.sh       # Thin bash wrapper → delegates to learn.py
+│   ├── learn.py       # Python CLI (SM-2, quiz engine, all commands)
+│   └── epub.py        # EPUB 3 generator (zero-dep + optional extras)
 └── templates/
     ├── syllabus.yaml  # 20-module course skeleton
     ├── module.md      # Lesson structure with Feynman/reframe/drill sections
@@ -49,31 +50,40 @@ Learner-facing subset of SKILL.md Section 4. Keep in sync — this is the quick 
 
 ### scripts/learn.sh
 
-Bash CLI. Key subsystems:
+Thin bash wrapper (6 lines). Delegates all logic to `learn.py`.
 
-| Function | Lines | Purpose |
-|----------|-------|---------|
-| `cmd_init` | 32-43 | Create subject directory, copy syllabus template |
-| `cmd_start` | 52-84 | Show subject overview + module list |
-| `cmd_quiz` | 86-183 | Parse YAML, shuffle, display MCQs, update SRS deck |
-| `cmd_review` | 185-275 | SM-2 algorithm: due cards, scoring, interval calc |
-| `cmd_stats` | 277-317 | Show card counts, due today, mastery rate, avg ease |
-| `cmd_explain` | 319-350 | Feynman technique prompt with gap detection guide |
-| `cmd_export` | 352-381 | Export deck to CSV for Anki import |
-| `cmd_epub` | 384-466 | Generate EPUB book from all modules + quizzes |
+### scripts/learn.py
 
-#### SM-2 Algorithm (cmd_review, lines 231-256)
+Python CLI. Key subsystems:
+
+| Function | Purpose |
+|----------|---------|
+| `sm2_update()` | SM-2 algorithm: card interval, ease factor, repetition count |
+| `cmd_init` | Create subject directory, copy syllabus template |
+| `cmd_start` | Show subject overview + module list |
+| `cmd_create_module` | Create module from template |
+| `cmd_quiz` | Parse YAML, shuffle, display MCQs, update SRS deck |
+| `cmd_review` | SM-2 review: due cards, scoring, interval calc |
+| `cmd_stats` | Card counts, due today, mastery rate, avg ease, session history |
+| `cmd_explain` | Feynman technique prompt with gap detection guide |
+| `cmd_export` | Export deck to CSV for Anki import |
+| `cmd_epub` | Generate EPUB book from all modules + quizzes |
+| `cmd_epub_regen` | Regenerate EPUB from cached `book.md` |
+| `cmd_epub_verify` | Validate EPUB structure |
+
+#### SM-2 Algorithm (`sm2_update()`)
 
 - Quality >= 3 (correct): interval grows (1d → 6d → × ease_factor), repetitions++
 - Quality < 3 (wrong): reset reps=0, interval=1d
 - Ease factor adjustment: `ef + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02))`
 - Min ease factor: 1.3
 
-#### Quiz Engine (cmd_quiz, lines 74-171)
+#### Quiz Engine (`cmd_quiz`)
 
-- Uses Python3 with `yaml` library. Falls back to raw `cat` if Python unavailable.
+- Uses Python3 with `yaml` library.
 - Options shuffled per question, keys remapped (A-D → a-d).
-- Each quiz attempt creates SRS cards if missing.
+- Each quiz attempt updates SRS deck with SM-2 intervals (correct→interval grows, wrong→reset).
+- Falls back to raw display if `yaml` unavailable.
 
 ### templates/
 
@@ -113,12 +123,24 @@ Apply all 8 rules to every generated module. If content violates any rule, rewri
 
 ## Adding Features
 
-1. Add CLI subcommand: new `cmd_*` function in `learn.sh`, register in `case` block and `help` text.
+1. Add CLI subcommand: new `cmd_*` function in `learn.py`, register in `dispatch` dict and argparse subparser.
 2. Update SKILL.md Section 5 (CLI) with new command.
 3. If feature affects study flow, update Section 4 (Study Protocol) and `study-protocol.md`.
 4. If feature affects content creation, update Section 3 (Content Creation Protocol).
 5. If feature affects cost, update Section 6 (Cost Model) and verify < $0.10/course.
 6. Add test: run existing `learn.sh` commands against a test subject.
+
+### Mermaid Diagram Support (added 2026-06)
+
+- **epub.py lines XXX-XXX**: `_mermaid_render()`, `_mermaid_render_local()`, `_mermaid_render_api()`, `_process_mermaid_blocks()`
+- Default mode: `api` (mermaid.ink GET, zero deps). `local` mode calls `mmdc` CLI.
+- Fallback chain: local → api → text fallback in `<figure>`.
+- SVG files stored as separate EPUB items (`image/svg+xml`), referenced by `<img>` in XHTML.
+- CLI flags: `--mermaid api|local|off` on `build`/`from-md` subcommands.
+- learn.sh: `--local` flag passed through as `--mermaid local`.
+- Content rules: Rule #9 added — Mermaid for complex concepts (branching, state, workflows).
+- SKILL.md: §3 content principles + quality rules, §5 CLI, §7 Integration updated.
+- module.md: optional ```mermaid slot after concept definition.
 
 ## Testing
 
@@ -130,8 +152,7 @@ Apply all 8 rules to every generated module. If content violates any rule, rewri
 ls -R subjects/test-subject/
 
 # Create test module
-mkdir -p subjects/test-subject/modules/01-intro
-# Add lesson.md and quiz.yaml
+./scripts/learn.sh create-module test-subject 01-intro
 
 # Run quiz
 ./scripts/learn.sh quiz test-subject 01-intro
@@ -139,8 +160,11 @@ mkdir -p subjects/test-subject/modules/01-intro
 # Run review
 ./scripts/learn.sh review test-subject
 
-# Check stats
+# Check stats (includes session history)
 ./scripts/learn.sh stats test-subject
+
+# Export to Anki CSV
+./scripts/learn.sh export test-subject
 
 # Cleanup
 rm -rf subjects/test-subject

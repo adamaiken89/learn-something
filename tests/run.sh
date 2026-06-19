@@ -12,9 +12,18 @@ echo "========================================="
 echo ""
 echo "--- Python unit tests (test_epub.py) ---"
 if python3 "$SKILL_DIR/tests/test_epub.py"; then
-    echo "Python tests: PASS"
+    echo "EPUB tests: PASS"
 else
-    echo "Python tests: FAIL"
+    echo "EPUB tests: FAIL"
+    FAILED=1
+fi
+
+echo ""
+echo "--- Learn.py tests (test_learn.py) ---"
+if python3 "$SKILL_DIR/tests/test_learn.py"; then
+    echo "Learn.py tests: PASS"
+else
+    echo "Learn.py tests: FAIL"
     FAILED=1
 fi
 

@@ -13,15 +13,19 @@ Usage:
 """
 
 import argparse
+import base64
+import html.parser
 import os
 import re
+import shutil
+import subprocess
 import sys
+import tempfile
 import uuid
 import zipfile
 from datetime import datetime
-import html.parser
-from xml.sax.saxutils import escape
 from html import unescape as html_unescape
+from xml.sax.saxutils import escape
 
 # ── Optional dependencies ─────────────────────────────────────
 
@@ -331,17 +335,33 @@ def fallback_parse(text):
             continue
 
         if s.startswith('#### '):
-            t = s[5:]; hid = _slugify(t)
-            close_block(); result.append(f'<h4 id="{hid}">{_inline_md(t)}</h4>'); i += 1; continue
+            t = s[5:]
+            hid = _slugify(t)
+            close_block()
+            result.append(f'<h4 id="{hid}">{_inline_md(t)}</h4>')
+            i += 1
+            continue
         if s.startswith('### '):
-            t = s[4:]; hid = _slugify(t)
-            close_block(); result.append(f'<h3 id="{hid}">{_inline_md(t)}</h3>'); i += 1; continue
+            t = s[4:]
+            hid = _slugify(t)
+            close_block()
+            result.append(f'<h3 id="{hid}">{_inline_md(t)}</h3>')
+            i += 1
+            continue
         if s.startswith('## '):
-            t = s[3:]; hid = _slugify(t)
-            close_block(); result.append(f'<h2 id="{hid}">{_inline_md(t)}</h2>'); i += 1; continue
+            t = s[3:]
+            hid = _slugify(t)
+            close_block()
+            result.append(f'<h2 id="{hid}">{_inline_md(t)}</h2>')
+            i += 1
+            continue
         if s.startswith('# '):
-            t = s[2:]; hid = _slugify(t)
-            close_block(); result.append(f'<h1 id="{hid}">{_inline_md(t)}</h1>'); i += 1; continue
+            t = s[2:]
+            hid = _slugify(t)
+            close_block()
+            result.append(f'<h1 id="{hid}">{_inline_md(t)}</h1>')
+            i += 1
+            continue
 
         if '|' in s and i + 1 < len(lines) and re.match(r'^[\s|:\-]+$', lines[i + 1].strip()):
             close_block()
@@ -497,13 +517,12 @@ def _highlight_html(html):
         return html
 
     from pygments import highlight
-    from pygments.lexers import get_lexer_by_name, guess_lexer, TextLexer
     from pygments.formatters import HtmlFormatter
+    from pygments.lexers import TextLexer, get_lexer_by_name, guess_lexer
 
     fmt = HtmlFormatter(style='monokai', noclasses=False, nowrap=True)
 
     def _replace(m):
-        pre_tag = m.group(1)
         code_tag = m.group(2)
         code_text = html_unescape(m.group(3))
 
@@ -526,6 +545,84 @@ def _highlight_html(html):
 
     html = re.sub(r'(<pre[^>]*>)(<code[^>]*>)(.*?)(</code></pre>)', _replace, html, flags=re.DOTALL)
     return html
+
+
+# ── Mermaid diagram rendering ──────────────────────────────────
+
+MERMAID_DEFAULT_MODE = 'api'
+
+def _mermaid_render(source, mode, tmp_dir, idx):
+    """Render mermaid source to SVG string.
+
+    Modes: 'api' (mermaid.ink, default), 'local' (mmdc CLI), 'off' (return None).
+    Fallback chain: local → api → None.
+    """
+    if mode == 'off':
+        return None
+
+    svg = None
+    if mode == 'local':
+        svg = _mermaid_render_local(source, tmp_dir, idx)
+    if svg is None and mode in ('api', 'local'):
+        svg = _mermaid_render_api(source)
+    return svg
+
+
+def _mermaid_render_local(source, tmp_dir, idx):
+    """Render via mmdc CLI. Returns SVG string or None."""
+    mmd_file = os.path.join(tmp_dir, f'diagram_{idx:03d}.mmd')
+    svg_file = os.path.join(tmp_dir, f'diagram_{idx:03d}.svg')
+    try:
+        with open(mmd_file, 'w', encoding='utf-8') as f:
+            f.write(source)
+        subprocess.run(
+            ['mmdc', '-i', mmd_file, '-o', svg_file, '-q'],
+            capture_output=True, timeout=30, check=True
+        )
+        with open(svg_file, 'r', encoding='utf-8') as f:
+            return f.read()
+    except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
+        return None
+
+
+def _mermaid_render_api(source):
+    """Render via mermaid.ink API. Returns SVG string or None."""
+    try:
+        import urllib.request
+        encoded = base64.urlsafe_b64encode(source.encode('utf-8')).decode('ascii')
+        url = f'https://mermaid.ink/svg/{encoded}'
+        req = urllib.request.Request(url, headers={'User-Agent': 'learn-anything/1.0'})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return resp.read().decode('utf-8')
+    except (urllib.error.URLError, OSError, ValueError):
+        return None
+
+
+def _process_mermaid_blocks(html, mode, tmp_dir):
+    """Replace <pre><code class="language-mermaid"> blocks with SVG <img> tags.
+
+    Returns (modified_html, [(svg_filename, svg_content), ...]).
+    """
+    svg_files = []
+    idx = [0]
+
+    def replace(m):
+        code_escaped = m.group(1)
+        code = html_unescape(code_escaped)
+        svg_content = _mermaid_render(code, mode, tmp_dir, idx[0])
+        filename = f'diagram_{idx[0]:03d}.svg'
+        idx[0] += 1
+        if svg_content:
+            svg_files.append((filename, svg_content))
+            return f'<figure><img src="{filename}" alt="Diagram"/></figure>'
+        else:
+            return f'<figure><pre><code class="language-mermaid">{escape(code)}</code></pre><figcaption>Mermaid diagram (install mmdc or enable network to render)</figcaption></figure>'
+
+    html = re.sub(
+        r'<pre><code\s+class="[^"]*\blanguage-mermaid\b[^"]*">(.*?)</code></pre>',
+        replace, html, flags=re.DOTALL
+    )
+    return html, svg_files
 
 
 # ── Title formatting + slugify ─────────────────────────────────
@@ -674,7 +771,7 @@ def _render_toc_nav(tree, depth=0):
 
 # ── EPUB generation ────────────────────────────────────────────
 
-def generate_epub(chapters, output_path, title, author='Learn Anything'):
+def generate_epub(chapters, output_path, title, author='Learn Anything', mermaid_mode='api'):
     uid = str(uuid.uuid4())
     now = datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
     css = make_css(use_pygments=HAS_PYGMENTS)
@@ -685,6 +782,9 @@ def generate_epub(chapters, output_path, title, author='Learn Anything'):
     xhtml_files = {}
     manifest = []
     spine = []
+    all_svg_files = []
+
+    tmp_dir = tempfile.mkdtemp(prefix='opencode-mermaid-')
 
     cover_html = f'''<?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE html>
@@ -705,7 +805,9 @@ def generate_epub(chapters, output_path, title, author='Learn Anything'):
         else:
             html_content = fallback_parse(content)
         html_content = _escape_text_nodes(html_content)
+        html_content, svg_files = _process_mermaid_blocks(html_content, mermaid_mode, tmp_dir)
         html_content = _highlight_html(html_content)
+        all_svg_files.extend(svg_files)
 
         filename = f'ch{idx:03d}.xhtml'
         pid = f'ch{idx}'
@@ -741,6 +843,11 @@ def generate_epub(chapters, output_path, title, author='Learn Anything'):
     xhtml_files['nav.xhtml'] = nav_html
     manifest.append(('nav.xhtml', 'application/xhtml+xml', 'nav'))
 
+    svg_idx = 0
+    for svg_fname, svg_content in all_svg_files:
+        svg_idx += 1
+        manifest.append((svg_fname, 'image/svg+xml', f'svg{svg_idx}'))
+
     opf_manifest = '<item id="css" href="style.css" media-type="text/css"/>\n'
     for fname, mtype, pid in manifest:
         opf_manifest += f'<item id="{pid}" href="{fname}" media-type="{mtype}"/>\n'
@@ -771,13 +878,18 @@ def generate_epub(chapters, output_path, title, author='Learn Anything'):
 </rootfiles>
 </container>'''
 
-    with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zf:
-        zf.writestr('mimetype', 'application/epub+zip', compress_type=zipfile.ZIP_STORED)
-        zf.writestr('META-INF/container.xml', container)
-        zf.writestr('EPUB/content.opf', opf)
-        zf.writestr('EPUB/style.css', css)
-        for fname, content in xhtml_files.items():
-            zf.writestr(f'EPUB/{fname}', content)
+    try:
+        with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr('mimetype', 'application/epub+zip', compress_type=zipfile.ZIP_STORED)
+            zf.writestr('META-INF/container.xml', container)
+            zf.writestr('EPUB/content.opf', opf)
+            zf.writestr('EPUB/style.css', css)
+            for fname, content in xhtml_files.items():
+                zf.writestr(f'EPUB/{fname}', content)
+            for svg_fname, svg_content in all_svg_files:
+                zf.writestr(f'EPUB/{svg_fname}', svg_content)
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 # ── EPUB verification ──────────────────────────────────────────
@@ -911,6 +1023,8 @@ def main():
     p_build.add_argument('output')
     p_build.add_argument('--title', default=None)
     p_build.add_argument('--author', default='Learn Anything')
+    p_build.add_argument('--mermaid', default=MERMAID_DEFAULT_MODE, choices=['api', 'local', 'off'],
+                        help='Mermaid rendering mode: api (default), local (mmdc CLI), off (skip)')
 
     p_vfy = sub.add_parser('verify', help='Validate EPUB file structure')
     p_vfy.add_argument('epub_file')
@@ -920,6 +1034,8 @@ def main():
     p_md.add_argument('output')
     p_md.add_argument('--title', default=None)
     p_md.add_argument('--author', default='Learn Anything')
+    p_md.add_argument('--mermaid', default=MERMAID_DEFAULT_MODE, choices=['api', 'local', 'off'],
+                        help='Mermaid rendering mode: api (default), local (mmdc CLI), off (skip)')
 
     sub.add_parser('css', help='Print CSS for customization')
 
@@ -976,7 +1092,7 @@ def main():
     chapters = split_chapters(md_text)
     if not chapters:
         chapters = [(title, md_text)]
-    generate_epub(chapters, output, title, author)
+    generate_epub(chapters, output, title, author, mermaid_mode=args.mermaid)
     size_kb = os.path.getsize(output) / 1024
     print(f"EPUB: {output} ({len(chapters)} chapters, {size_kb:.1f} KB)")
 

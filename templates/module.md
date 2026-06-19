@@ -15,6 +15,10 @@ Language: [en/zh/yue]
 
 [Clear definition + explanation]
 
+> ```mermaid
+> [Optional: flowchart/sequence/state diagram for complex concepts]
+> ```
+
 > **Think**: [Question that challenges learner on concept just introduced]
 >
 > *Answer: [Brief explanation so learner can self-check]*
