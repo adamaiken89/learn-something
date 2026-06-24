@@ -2,20 +2,20 @@
 """Learn Anything CLI — study with spaced repetition (SM-2).
 
 Usage:
-  learn.py init <subject> [lang]
-  learn.py start <subject>
-  learn.py create-module <subject> <module-id> [--name NAME]
-  learn.py quiz <subject> <module>
-  learn.py explain <subject> <module>
-  learn.py feynman <subject> <module>
-  learn.py review <subject>
-  learn.py stats <subject>
-  learn.py export <subject>
-   learn.py epub <subject> [output] [--mermaid api|local|off]
-   learn.py epub-regen <subject> [output] [--mermaid api|local|off]
-   learn.py epub-verify <subject> [output]
-   learn.py pdf <subject> [output] [--engine auto|weasyprint|pandoc|raw]
-   learn.py pdf-regen <subject> [output] [--engine auto|weasyprint|pandoc|raw]
+  learn.py init <topic> [lang]
+  learn.py start <topic>
+  learn.py create-module <topic> <module-id> [--name NAME]
+  learn.py quiz <topic> <module>
+  learn.py explain <topic> <module>
+  learn.py feynman <topic> <module>
+  learn.py review <topic>
+  learn.py stats <topic>
+  learn.py export <topic>
+   learn.py epub <topic> [output] [--mermaid api|local|off]
+   learn.py epub-regen <topic> [output] [--mermaid api|local|off]
+   learn.py epub-verify <topic> [output]
+   learn.py pdf <topic> [output] [--engine auto|weasyprint|pandoc|raw]
+   learn.py pdf-regen <topic> [output] [--engine auto|weasyprint|pandoc|raw]
 """
 
 import argparse
@@ -34,20 +34,7 @@ from pathlib import Path
 # ── Paths ──────────────────────────────────────────────────────
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
-
-
-def _get_subjects_dir():
-    candidates = [
-        SKILL_DIR / '..' / '..' / 'subjects',
-        Path.cwd() / 'subjects',
-    ]
-    for d in candidates:
-        if d.resolve().exists():
-            return d.resolve()
-    return (Path.cwd() / 'subjects').resolve()
-
-
-SUBJECTS_DIR = _get_subjects_dir()
+SUBJECTS_DIR = Path.cwd()
 
 # ── Colors ─────────────────────────────────────────────────────
 
@@ -106,87 +93,76 @@ def sm2_update(card, quality):
     return card
 
 
-# ── Subject helpers ─────────────────────────────────────────────
+# ── Topic helpers ───────────────────────────────────────────────
 
 
-def _subject_path(subject):
-    return SUBJECTS_DIR / subject
+def _topic_path(topic):
+    return SUBJECTS_DIR / topic
 
 
-def _check_subject(subject):
-    path = _subject_path(subject)
+def _check_topic(topic):
+    path = _topic_path(topic)
     if not path.exists():
-        print(f"{RED}Subject '{subject}' not found at {path}{NC}")
-        print('Available:')
-        _list_subjects()
+        (path / 'modules').mkdir(parents=True, exist_ok=True)
+        (path / 'srs').mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _module_path(topic, module):
+    return _topic_path(topic) / 'modules' / module
+
+
+def _check_module(topic, module):
+    path = _module_path(topic, module)
+    if not path.exists():
+        print(f"{RED}Module '{module}' not found in '{topic}'{NC}")
         sys.exit(1)
     return path
 
 
-def _list_subjects():
-    if SUBJECTS_DIR.exists():
-        for d in sorted(SUBJECTS_DIR.iterdir()):
-            if d.is_dir():
-                print(f'  {d.name}')
-    else:
-        print('  (no subjects yet)')
-
-
-def _module_path(subject, module):
-    return _subject_path(subject) / 'modules' / module
-
-
-def _check_module(subject, module):
-    path = _module_path(subject, module)
-    if not path.exists():
-        print(f"{RED}Module '{module}' not found in '{subject}'{NC}")
-        sys.exit(1)
-    return path
-
-
-def _list_modules(subject):
-    path = _subject_path(subject) / 'modules'
+def _list_modules(topic):
+    path = _topic_path(topic) / 'modules'
     if not path.exists():
         return []
     return sorted(d.name for d in path.iterdir() if d.is_dir() and (d / 'lesson.md').exists())
 
 
-def _load_deck(subject):
-    deck_path = _subject_path(subject) / 'srs' / 'deck.json'
+def _load_deck(topic):
+    deck_path = _topic_path(topic) / 'srs' / 'deck.json'
     if deck_path.exists():
         with open(deck_path) as f:
             return json.load(f)
     return []
 
 
-def _save_deck(subject, deck):
-    path = _subject_path(subject) / 'srs' / 'deck.json'
+def _save_deck(topic, deck):
+    path = _topic_path(topic) / 'srs' / 'deck.json'
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, 'w') as f:
         json.dump(deck, f, indent=2)
 
 
-def _load_stats(subject):
-    path = _subject_path(subject) / 'srs' / 'stats.json'
+def _load_stats(topic):
+    path = _topic_path(topic) / 'srs' / 'stats.json'
     if path.exists():
         with open(path) as f:
             return json.load(f)
     return {'sessions': []}
 
 
-def _save_stats(subject, stats):
-    path = _subject_path(subject) / 'srs' / 'stats.json'
+def _save_stats(topic, stats):
+    path = _topic_path(topic) / 'srs' / 'stats.json'
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, 'w') as f:
         json.dump(stats, f, indent=2)
 
 
-def _record_session(subject, session_type, module=None, score=None, total=None):
-    stats = _load_stats(subject)
+def _record_session(topic, session_type, module=None, score=None, total=None):
+    stats = _load_stats(topic)
     record = {
         'date': datetime.now().strftime('%Y-%m-%d'),
         'type': session_type,
-        'subject': subject,
+        'topic': topic,
     }
     if module:
         record['module'] = module
@@ -195,19 +171,16 @@ def _record_session(subject, session_type, module=None, score=None, total=None):
     if total is not None:
         record['total'] = total
     stats['sessions'].append(record)
-    _save_stats(subject, stats)
+    _save_stats(topic, stats)
 
 
 # ── Commands ────────────────────────────────────────────────────
 
 
 def cmd_init(args):
-    subject = args.subject
+    topic = args.topic
     lang = args.lang or 'en'
-    path = _subject_path(subject)
-    if path.exists():
-        print(f"{RED}Subject '{subject}' already exists{NC}")
-        sys.exit(1)
+    path = _topic_path(topic)
 
     (path / 'modules').mkdir(parents=True, exist_ok=True)
     (path / 'srs').mkdir(parents=True, exist_ok=True)
@@ -216,7 +189,7 @@ def cmd_init(args):
     if syllabus_template.exists():
         with open(syllabus_template) as f:
             content = f.read()
-        content = content.replace('"[Subject]"', f'"{subject}"')
+        content = content.replace('"[Subject]"', f'"{topic}"')
         content = re.sub(r'^language: .*', f'language: {lang}', content, flags=re.MULTILINE)
         with open(path / 'syllabus.yaml', 'w') as f:
             f.write(content)
@@ -225,13 +198,13 @@ def cmd_init(args):
 
     print(f'{GREEN}Created {path} (language: {lang}){NC}')
     print(
-        f'Edit syllabus.yaml, then create modules with: learn.py create-module {subject} <module-id>'
+        f'Edit syllabus.yaml, then create modules with: learn.py create-module {topic} <module-id>'
     )
 
 
 def cmd_start(args):
-    subject = args.subject
-    spath = _check_subject(subject)
+    topic = args.topic
+    spath = _check_topic(topic)
 
     syllabus = spath / 'syllabus.yaml'
     if syllabus.exists():
@@ -260,20 +233,20 @@ def cmd_start(args):
                     print(f'  {YELLOW}{mod.name}{NC} (no lesson yet)')
 
     print()
-    print(f'Open lesson: learn.py open {subject} <module-id>')
-    print(f'Take quiz:  learn.py quiz {subject} <module-id>')
-    print(f'Review:     learn.py review {subject}')
+    print(f'Open lesson: learn.py open {topic} <module-id>')
+    print(f'Take quiz:  learn.py quiz {topic} <module-id>')
+    print(f'Review:     learn.py review {topic}')
 
 
 def cmd_create_module(args):
-    subject = args.subject
+    topic = args.topic
     module_id = args.module_id
     name = args.name or module_id
-    _check_subject(subject)
+    _check_topic(topic)
 
-    mod_path = _module_path(subject, module_id)
+    mod_path = _module_path(topic, module_id)
     if mod_path.exists():
-        print(f"{RED}Module '{module_id}' already exists in '{subject}'{NC}")
+        print(f"{RED}Module '{module_id}' already exists in '{topic}'{NC}")
         sys.exit(1)
 
     mod_path.mkdir(parents=True, exist_ok=True)
@@ -299,12 +272,12 @@ def cmd_create_module(args):
 
 
 def cmd_quiz(args):
-    subject = args.subject
+    topic = args.topic
     module = args.module
-    _check_subject(subject)
-    _check_module(subject, module)
+    _check_topic(topic)
+    _check_module(topic, module)
 
-    quiz_path = _module_path(subject, module) / 'quiz.yaml'
+    quiz_path = _module_path(topic, module) / 'quiz.yaml'
     if not quiz_path.exists():
         print(f'{RED}No quiz found at {quiz_path}{NC}')
         sys.exit(1)
@@ -329,9 +302,9 @@ def cmd_quiz(args):
     correct = 0
     total = len(questions)
 
-    deck = _load_deck(subject)
+    deck = _load_deck(topic)
 
-    print(f'{CYAN}=== {subject} / {module} Quiz ==={NC}\n')
+    print(f'{CYAN}=== {topic} / {module} Quiz ==={NC}\n')
 
     for i, q in enumerate(questions, 1):
         print(f'--- Question {i}/{total} ---')
@@ -396,25 +369,25 @@ def cmd_quiz(args):
             sm2_update(card, quality)
             deck.append(card)
 
-    _save_deck(subject, deck)
+    _save_deck(topic, deck)
 
     pct = correct * 100 // total if total else 0
     print(f'\nScore: {correct}/{total} ({pct}%)')
-    _record_session(subject, 'quiz', module=module, score=correct, total=total)
+    _record_session(topic, 'quiz', module=module, score=correct, total=total)
 
 
 def cmd_explain(args):
-    subject = args.subject
+    topic = args.topic
     module = args.module
-    _check_subject(subject)
-    _check_module(subject, module)
+    _check_topic(topic)
+    _check_module(topic, module)
 
-    lesson_path = _module_path(subject, module) / 'lesson.md'
+    lesson_path = _module_path(topic, module) / 'lesson.md'
     if not lesson_path.exists():
         print(f'{RED}No lesson found at {lesson_path}{NC}')
         sys.exit(1)
 
-    print(f'{CYAN}=== Feynman Explain: {subject} / {module} ==={NC}')
+    print(f'{CYAN}=== Feynman Explain: {topic} / {module} ==={NC}')
     print()
     print('Step 1: Explain the core concept as if teaching a child.')
     print('  - Simplest words. No jargon.')
@@ -447,12 +420,12 @@ def cmd_explain(args):
 
 
 def cmd_review(args):
-    subject = args.subject
-    _check_subject(subject)
+    topic = args.topic
+    _check_topic(topic)
 
-    deck = _load_deck(subject)
+    deck = _load_deck(topic)
     if not deck:
-        print(f'{YELLOW}No SRS deck yet. Take a quiz first: learn.py quiz {subject} <module>{NC}')
+        print(f'{YELLOW}No SRS deck yet. Take a quiz first: learn.py quiz {topic} <module>{NC}')
         return
 
     today = datetime.now().strftime('%Y-%m-%d')
@@ -510,19 +483,19 @@ def cmd_review(args):
 
         sm2_update(card, quality)
 
-    _save_deck(subject, deck)
+    _save_deck(topic, deck)
 
     if total > 0:
         pct = correct * 100 // total
         print(f'\nScore: {correct}/{total} ({pct}%)')
-        _record_session(subject, 'review', score=correct, total=total)
+        _record_session(topic, 'review', score=correct, total=total)
 
 
 def cmd_stats(args):
-    subject = args.subject
-    _check_subject(subject)
+    topic = args.topic
+    _check_topic(topic)
 
-    deck = _load_deck(subject)
+    deck = _load_deck(topic)
     if not deck:
         print(f'{YELLOW}No stats yet. Take a quiz first.{NC}')
         return
@@ -551,7 +524,7 @@ def cmd_stats(args):
         print(f'  Module {mod}: {module_counts[mod]} cards')
 
     # Session history
-    stats = _load_stats(subject)
+    stats = _load_stats(topic)
     if stats.get('sessions'):
         print()
         print('Recent sessions:')
@@ -565,15 +538,15 @@ def cmd_stats(args):
 
 
 def cmd_export(args):
-    subject = args.subject
-    _check_subject(subject)
+    topic = args.topic
+    _check_topic(topic)
 
-    deck = _load_deck(subject)
+    deck = _load_deck(topic)
     if not deck:
         print(f'{YELLOW}No deck to export.{NC}')
         return
 
-    out_path = _subject_path(subject) / 'srs' / 'deck.csv'
+    out_path = _topic_path(topic) / 'srs' / 'deck.csv'
     with open(out_path, 'w', newline='') as f:
         w = csv.writer(f)
         w.writerow(['Question', 'Answer', 'Explanation', 'Tags'])
@@ -592,16 +565,16 @@ def cmd_export(args):
 
 
 def cmd_epub(args):
-    subject = args.subject
+    topic = args.topic
     output = args.output
     mermaid = args.mermaid
     description = args.description
 
-    _check_subject(subject)
-    spath = _subject_path(subject)
+    _check_topic(topic)
+    spath = _topic_path(topic)
 
     if not output:
-        output = str(spath / f'{subject}.epub')
+        output = str(spath / f'{topic}.epub')
 
     epub_script = SKILL_DIR / 'scripts' / 'epub.py'
     if not epub_script.exists():
@@ -612,7 +585,7 @@ def cmd_epub(args):
     if description:
         cmd.extend(['--description', description])
 
-    print(f'{CYAN}Building EPUB: {subject}{NC}')
+    print(f'{CYAN}Building EPUB: {topic}{NC}')
     result = subprocess.run(cmd, capture_output=True, text=True)
     print(result.stdout, end='')
     if result.stderr:
@@ -637,21 +610,21 @@ def _pdf_extra_args(args):
 
 
 def cmd_pdf(args):
-    subject = args.subject
+    topic = args.topic
     output = args.output
 
-    _check_subject(subject)
-    spath = _subject_path(subject)
+    _check_topic(topic)
+    spath = _topic_path(topic)
 
     if not output:
-        output = str(spath / f'{subject}.pdf')
+        output = str(spath / f'{topic}.pdf')
 
     pdf_script = SKILL_DIR / 'scripts' / 'pdf.py'
     if not pdf_script.exists():
         print(f'{RED}pdf.py not found at {pdf_script}{NC}')
         sys.exit(1)
 
-    print(f'{CYAN}Building PDF: {subject}{NC}')
+    print(f'{CYAN}Building PDF: {topic}{NC}')
     cmd = [sys.executable, str(pdf_script), 'build', str(spath), output] + _pdf_extra_args(args)
     result = subprocess.run(
         cmd,
@@ -671,11 +644,11 @@ def cmd_pdf(args):
 
 
 def cmd_pdf_regen(args):
-    subject = args.subject
+    topic = args.topic
     output = args.output
 
-    _check_subject(subject)
-    spath = _subject_path(subject)
+    _check_topic(topic)
+    spath = _topic_path(topic)
     book_md = spath / 'book.md'
 
     if not book_md.exists():
@@ -683,14 +656,14 @@ def cmd_pdf_regen(args):
         return
 
     if not output:
-        output = str(spath / f'{subject}.pdf')
+        output = str(spath / f'{topic}.pdf')
 
     pdf_script = SKILL_DIR / 'scripts' / 'pdf.py'
     if not pdf_script.exists():
         print(f'{RED}pdf.py not found at {pdf_script}{NC}')
         sys.exit(1)
 
-    print(f'{CYAN}Regenerating PDF from cached markdown: {subject}{NC}')
+    print(f'{CYAN}Regenerating PDF from cached markdown: {topic}{NC}')
     cmd = [sys.executable, str(pdf_script), 'from-md', str(book_md), output] + _pdf_extra_args(args)
     result = subprocess.run(
         cmd,
@@ -710,13 +683,13 @@ def cmd_pdf_regen(args):
 
 
 def cmd_epub_regen(args):
-    subject = args.subject
+    topic = args.topic
     output = args.output
     mermaid = args.mermaid
     description = args.description
 
-    _check_subject(subject)
-    spath = _subject_path(subject)
+    _check_topic(topic)
+    spath = _topic_path(topic)
     book_md = spath / 'book.md'
 
     if not book_md.exists():
@@ -724,7 +697,7 @@ def cmd_epub_regen(args):
         return
 
     if not output:
-        output = str(spath / f'{subject}.epub')
+        output = str(spath / f'{topic}.epub')
 
     epub_script = SKILL_DIR / 'scripts' / 'epub.py'
     if not epub_script.exists():
@@ -735,7 +708,7 @@ def cmd_epub_regen(args):
     if description:
         cmd.extend(['--description', description])
 
-    print(f'{CYAN}Regenerating EPUB from cached markdown: {subject}{NC}')
+    print(f'{CYAN}Regenerating EPUB from cached markdown: {topic}{NC}')
     result = subprocess.run(cmd, capture_output=True, text=True)
     print(result.stdout, end='')
     if result.stderr:
@@ -750,14 +723,14 @@ def cmd_epub_regen(args):
 
 
 def cmd_epub_verify(args):
-    subject = args.subject
+    topic = args.topic
     output = args.output
 
-    _check_subject(subject)
-    spath = _subject_path(subject)
+    _check_topic(topic)
+    spath = _topic_path(topic)
 
     if not output:
-        epub_path = spath / f'{subject}.epub'
+        epub_path = spath / f'{topic}.epub'
     else:
         epub_path = Path(output)
 
@@ -770,7 +743,7 @@ def cmd_epub_verify(args):
         print(f'{RED}epub.py not found at {epub_script}{NC}')
         sys.exit(1)
 
-    print(f'{CYAN}Verifying EPUB: {subject}{NC}')
+    print(f'{CYAN}Verifying EPUB: {topic}{NC}')
     result = subprocess.run(
         [sys.executable, str(epub_script), 'verify', str(epub_path)],
         capture_output=True,
@@ -790,60 +763,60 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Commands:
-  init <subject> [lang]        Create new subject (lang: en|zh|yue, default en)
-  start <subject>              Show subject overview and modules
-  create-module <sub> <mod>    Create new module from template
-  quiz <subject> <mod>         Take MCQ quiz
-  explain <subject> <mod>      Feynman Technique prompt
-  feynman <subject> <mod>      Alias for explain
-  review <subject>             Spaced repetition review
-  stats <subject>              Study statistics
-  export <subject>             Export to Anki CSV
-  epub <subject> [file]        Export course to EPUB book
-  epub-regen <subject> [file]  Regenerate EPUB from cached markdown
-  epub-verify <subject> [file] Validate EPUB structure
-  pdf <subject> [file]         Export course to PDF
-  pdf-regen <subject> [file]   Regenerate PDF from cached book.md
+  init <topic> [lang]           Create topic dir (optional, auto-created on first use)
+  start <topic>                 Show topic overview and modules
+  create-module <topic> <mod>   Create new module from template
+  quiz <topic> <mod>            Take MCQ quiz
+  explain <topic> <mod>         Feynman Technique prompt
+  feynman <topic> <mod>         Alias for explain
+  review <topic>                Spaced repetition review
+  stats <topic>                 Study statistics
+  export <topic>                Export to Anki CSV
+  epub <topic> [file]           Export course to EPUB book
+  epub-regen <topic> [file]     Regenerate EPUB from cached markdown
+  epub-verify <topic> [file]    Validate EPUB structure
+  pdf <topic> [file]            Export course to PDF
+  pdf-regen <topic> [file]      Regenerate PDF from cached book.md
         """,
     )
     sub = parser.add_subparsers(dest='command')
     sub.required = True
 
-    p = sub.add_parser('init', help='Create new subject')
-    p.add_argument('subject')
+    p = sub.add_parser('init', help='Create topic directory with syllabus template')
+    p.add_argument('topic')
     p.add_argument('lang', nargs='?', default='en')
 
-    p = sub.add_parser('start', help='Show subject overview')
-    p.add_argument('subject')
+    p = sub.add_parser('start', help='Show topic overview')
+    p.add_argument('topic')
 
     p = sub.add_parser('create-module', help='Create new module from template')
-    p.add_argument('subject')
+    p.add_argument('topic')
     p.add_argument('module_id')
     p.add_argument('--name', default=None, help='Human-readable module name')
 
     p = sub.add_parser('quiz', help='Take MCQ quiz')
-    p.add_argument('subject')
+    p.add_argument('topic')
     p.add_argument('module')
 
     p = sub.add_parser('explain', help='Feynman Technique prompt')
-    p.add_argument('subject')
+    p.add_argument('topic')
     p.add_argument('module')
 
     p = sub.add_parser('feynman', help='Feynman Technique prompt (alias)')
-    p.add_argument('subject')
+    p.add_argument('topic')
     p.add_argument('module')
 
     p = sub.add_parser('review', help='Spaced repetition review')
-    p.add_argument('subject')
+    p.add_argument('topic')
 
     p = sub.add_parser('stats', help='Study statistics')
-    p.add_argument('subject')
+    p.add_argument('topic')
 
     p = sub.add_parser('export', help='Export to Anki CSV')
-    p.add_argument('subject')
+    p.add_argument('topic')
 
     p = sub.add_parser('epub', help='Export course to EPUB')
-    p.add_argument('subject')
+    p.add_argument('topic')
     p.add_argument('output', nargs='?', default=None)
     p.add_argument('--description', default='', help='Cover page description')
     p.add_argument(
@@ -854,7 +827,7 @@ Commands:
     )
 
     p = sub.add_parser('epub-regen', help='Regenerate EPUB from cached book.md')
-    p.add_argument('subject')
+    p.add_argument('topic')
     p.add_argument('output', nargs='?', default=None)
     p.add_argument('--description', default='', help='Cover page description')
     p.add_argument(
@@ -865,13 +838,13 @@ Commands:
     )
 
     p = sub.add_parser('epub-verify', help='Validate EPUB structure')
-    p.add_argument('subject')
+    p.add_argument('topic')
     p.add_argument('output', nargs='?', default=None)
 
     p = sub.add_parser('pdf', help='Export course to PDF')
-    p.add_argument('subject')
+    p.add_argument('topic')
     p.add_argument('output', nargs='?', default=None)
-    p.add_argument('--title', default=None, help='PDF title (default: subject dir name)')
+    p.add_argument('--title', default=None, help='PDF title (default: topic dir name)')
     p.add_argument('--author', default='Learn Anything', help='PDF author')
     p.add_argument(
         '--engine',
@@ -881,9 +854,9 @@ Commands:
     )
 
     p = sub.add_parser('pdf-regen', help='Regenerate PDF from cached book.md')
-    p.add_argument('subject')
+    p.add_argument('topic')
     p.add_argument('output', nargs='?', default=None)
-    p.add_argument('--title', default=None, help='PDF title (default: subject dir name)')
+    p.add_argument('--title', default=None, help='PDF title (default: topic dir name)')
     p.add_argument('--author', default='Learn Anything', help='PDF author')
     p.add_argument(
         '--engine',

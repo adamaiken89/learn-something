@@ -2,19 +2,19 @@
 
 Three learning theories fused:
 
-| Theory | Focus | In practice |
-|--------|-------|------------|
-| **Marva Collins** | Rigor, repetition, high expectations | Read thoroughly, reframe in own words, answer precisely, no slacking |
-| **Feynman Technique** | Explain simply, find gaps | Teach concept to imaginary child. If explanation fuzzy — gap found |
-| **Desirable Difficulties** | Make recall harder = retention stronger | Spaced repetition, mixed modules, varied MCQ difficulty |
+| Theory                     | Focus                                   | In practice                                                          |
+| -------------------------- | --------------------------------------- | -------------------------------------------------------------------- |
+| **Marva Collins**          | Rigor, repetition, high expectations    | Read thoroughly, reframe in own words, answer precisely, no slacking |
+| **Feynman Technique**      | Explain simply, find gaps               | Teach concept to imaginary child. If explanation fuzzy — gap found   |
+| **Desirable Difficulties** | Make recall harder = retention stronger | Spaced repetition, mixed modules, varied MCQ difficulty              |
 
 ## Session types
 
 ### LEARN (45-60 min) — Marva
-1. `less subjects/<topic>/modules/NN-name/lesson.md`
+1. `less <topic>/modules/NN-name/lesson.md`
 2. Read with full attention. Take notes.
 3. Answer reframe prompt (written). Judge the concept.
-4. `learn.sh quiz <topic> NN-name` — MCQs
+4. `learn.sh <topic> quiz NN-name` — MCQs
 5. Mark module complete
 
 ### EXPLAIN (15-20 min) — Feynman
@@ -26,10 +26,10 @@ Three learning theories fused:
 4. For deeper probing: open opencode chat, explain concept to AI. AI finds gaps.
 
 ### REVIEW (10-15 min, daily) — Desirable Difficulties
-1. `learn.sh review <topic>` → due cards SM-2
+1. `learn.sh <topic> review` → due cards SM-2
 2. Cards mixed from multiple modules (interleaved)
 3. Correct → interval grows. Wrong → reset 1d.
-4. `learn.sh stats <topic>` → retention, weak areas
+4. `learn.sh <topic> stats` → retention, weak areas
 
 ### MIXED (30-45 min) — all three
 - REVIEW 10 min
@@ -40,17 +40,17 @@ Three learning theories fused:
 
 Each MCQ = 1 SRS card.
 
-| Correctness | Effect |
-|-------------|--------|
-| Correct | Interval: 1d → 6d → × ease_factor |
-| Wrong | Reset to 1d, re-learn |
+| Correctness | Effect                            |
+| ----------- | --------------------------------- |
+| Correct     | Interval: 1d → 6d → × ease_factor |
+| Wrong       | Reset to 1d, re-learn             |
 
 Ease factor min 1.3. Adjusts per card based on answer history.
 
-## Subject structure
+## Directory structure
 
 ```
-subjects/<topic>/
+<topic>/
 ├── syllabus.yaml       # Full course plan (includes language: en|zh|yue)
 ├── modules/
 │   ├── NN-name/
