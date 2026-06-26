@@ -2,11 +2,10 @@
 set -euo pipefail
 
 SKILL_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-SUBJECTS_DIR="$SKILL_DIR/subjects"
 TEST_SUBJECT="test-subject-$$"
 
 cleanup() {
-    rm -rf "$SUBJECTS_DIR/$TEST_SUBJECT"
+    rm -rf "$TEST_SUBJECT"
 }
 trap cleanup EXIT
 
@@ -15,15 +14,15 @@ echo "=== EPUB CLI Integration Tests ==="
 # --- test: learn.sh init ---
 echo -n "  init subject ... "
 "$SKILL_DIR/scripts/learn.sh" init "$TEST_SUBJECT" > /dev/null 2>&1
-[ -d "$SUBJECTS_DIR/$TEST_SUBJECT" ] || { echo "FAIL: subject dir missing"; exit 1; }
-[ -f "$SUBJECTS_DIR/$TEST_SUBJECT/syllabus.yaml" ] || { echo "FAIL: syllabus missing"; exit 1; }
-[ -d "$SUBJECTS_DIR/$TEST_SUBJECT/modules" ] || { echo "FAIL: modules dir missing"; exit 1; }
+[ -d "$TEST_SUBJECT" ] || { echo "FAIL: subject dir missing"; exit 1; }
+[ -f "$TEST_SUBJECT/syllabus.yaml" ] || { echo "FAIL: syllabus missing"; exit 1; }
+[ -d "$TEST_SUBJECT/modules" ] || { echo "FAIL: modules dir missing"; exit 1; }
 echo "OK"
 
 # --- create a test module with content ---
 echo -n "  create test module ... "
-mkdir -p "$SUBJECTS_DIR/$TEST_SUBJECT/modules/01-test-module"
-cat > "$SUBJECTS_DIR/$TEST_SUBJECT/modules/01-test-module/lesson.md" << 'EOF'
+mkdir -p "$TEST_SUBJECT/modules/01-test-module"
+cat > "$TEST_SUBJECT/modules/01-test-module/lesson.md" << 'EOF'
 # Test Module
 
 ## Introduction
@@ -42,7 +41,7 @@ echo "OK"
 
 # --- test: learn.sh epub build ---
 echo -n "  epub build ... "
-EPUB_OUT="$SUBJECTS_DIR/$TEST_SUBJECT/$TEST_SUBJECT.epub"
+EPUB_OUT="$TEST_SUBJECT/$TEST_SUBJECT.epub"
 "$SKILL_DIR/scripts/learn.sh" epub "$TEST_SUBJECT" > /dev/null 2>&1
 [ -f "$EPUB_OUT" ] || { echo "FAIL: epub not created"; exit 1; }
 echo "OK"
