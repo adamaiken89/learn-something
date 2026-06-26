@@ -1,0 +1,111 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  PYTHON_VERSION: "3.10"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: pip install ruff pyyaml markdown pygments
+
+      - name: Validate version tag matches VERSION file
+        run: |
+          TAG="${GITHUB_REF#refs/tags/v}"
+          FILE_VER=$(cat VERSION | tr -d '[:space:]')
+          if [ "$TAG" != "$FILE_VER" ]; then
+            echo "ERROR: Tag v$TAG does not match VERSION file ($FILE_VER)"
+            exit 1
+          fi
+
+      - name: Lint
+        run: ruff check scripts/ tests/
+
+      - name: Run tests
+        run: bash tests/run.sh
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          PREV_TAG=$(git tag --sort=-v:refname | head -2 | tail -1)
+          if [ -z "$PREV_TAG" ] || [ "$PREV_TAG" = "$(git tag --sort=-v:refname | head -1)" ]; then
+            CHANGES=$(git log --pretty=format:"- %s (%h)" HEAD)
+          else
+            CHANGES=$(git log --pretty=format:"- %s (%h)" "$PREV_TAG"..HEAD)
+          fi
+
+          {
+            echo "changelog<<EOF"
+            echo "$CHANGES"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build skill tarball
+        run: |
+          VERSION=$(cat VERSION | tr -d '[:space:]')
+          SKILL_NAME="learn-anything"
+          BUILD_DIR="${SKILL_NAME}-${VERSION}"
+          TARBALL="${SKILL_NAME}-${VERSION}.tar.gz"
+
+          # Create clean build directory
+          mkdir -p "$BUILD_DIR"
+          cp -r scripts/ templates/ SKILL.md AGENTS.md README.md LICENSE study-protocol.md VERSION "$BUILD_DIR/"
+
+          # Build tarball
+          tar czf "$TARBALL" "$BUILD_DIR"
+          rm -rf "$BUILD_DIR"
+
+          echo "TARBALL=$TARBALL" >> "$GITHUB_ENV"
+
+      - name: Build EPUB
+        run: |
+          VERSION=$(cat VERSION | tr -d '[:space:]')
+          EPUB="learn-anything-${VERSION}-docs.epub"
+          python scripts/epub.py from-md SKILL.md "$EPUB" --title "Learn Anything v${VERSION}"
+          echo "EPUB=$EPUB" >> "$GITHUB_ENV"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          generate_release_notes: false
+          body: |
+            ## v${{ github.ref_name }}
+
+            ### Changes
+
+            ${{ steps.changelog.outputs.changelog }}
+
+            ### Assets
+
+            - **learn-anything-${{ github.ref_name }}.tar.gz** — skill archive (extract to `~/.config/opencode/skills/` or `~/.claude/skills/`)
+            - **learn-anything-${{ github.ref_name }}-docs.epub** — offline documentation
+
+            ### Install
+
+            ```bash
+            # Option 1: Clone
+            git clone --branch ${{ github.ref_name }} https://github.com/${{ github.repository }}.git ~/.config/opencode/skills/learn-anything
+
+            # Option 2: Download tarball
+            curl -L https://github.com/${{ github.repository }}/archive/refs/tags/${{ github.ref_name }}.tar.gz | tar xz -C ~/.config/opencode/skills/
+            mv ~/.config/opencode/skills/learn-anything-${{ github.ref_name }} ~/.config/opencode/skills/learn-anything
+            ```
+          files: |
+            ${{ env.TARBALL }}
+            ${{ env.EPUB }}

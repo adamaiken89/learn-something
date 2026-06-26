@@ -28,8 +28,10 @@ import shutil
 import subprocess
 import sys
 from collections import Counter
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
+
+import sm2 as _sm2
 
 # ── Paths ──────────────────────────────────────────────────────
 
@@ -61,8 +63,6 @@ BOLD = cval(C.BOLD)
 NC = cval(C.NC)
 
 # ── SM-2 Algorithm ─────────────────────────────────────────────
-
-import sm2 as _sm2
 
 sm2_update = _sm2.update
 
