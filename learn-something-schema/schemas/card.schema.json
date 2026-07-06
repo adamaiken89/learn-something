@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://learn-anything.dev/schemas/card.json",
+  "$id": "https://learn-something.dev/schemas/card.json",
   "title": "SRS Card",
   "description": "Schema for a single spaced repetition card",
   "type": "object",
@@ -52,13 +52,19 @@
     },
     "nextReviewDate": {
       "type": "string",
-      "format": "date-time",
-      "description": "ISO 8601 datetime when card is next due"
+      "anyOf": [
+        { "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        { "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:?\\d{2})?$" }
+      ],
+      "description": "Date (YYYY-MM-DD) or ISO 8601 datetime when card is next due"
     },
     "lastReviewed": {
       "type": ["string", "null"],
-      "format": "date-time",
-      "description": "ISO 8601 datetime of last review, or null if never reviewed"
+      "anyOf": [
+        { "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        { "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:?\\d{2})?$" }
+      ],
+      "description": "Date (YYYY-MM-DD) or ISO 8601 datetime of last review, or null if never reviewed"
     },
     "isStarred": {
       "type": "boolean",

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "agent": {
+    "build": {
+      "prompt": "Learn-Something CLI. Python scripts/ (learn.py, sm2.py, enrich.py, migrate_courses.py) + templates/. Tests: python3 tests/test_learn.py + tests/test_epub.py (no pytest). No venv (system python3). Key: pip install --break-system-packages for deps. Courses live in ~/.coursereader/subjects — run learn.sh from there."
+    }
+  },
+  "mcp": {
+    "filesystem": {
+      "type": "local",
+      "command": ["npx", "-y", "@modelcontextprotocol/server-filesystem"],
+      "args": [
+        "/Users/tszyeungwan/.config/opencode/skills/learn-something",
+        "/Users/tszyeungwan/.coursereader/subjects"
+      ],
+      "enabled": true
+    }
+  }
+}

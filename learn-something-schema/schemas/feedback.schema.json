@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://learn-anything.dev/schemas/feedback.json",
+  "$id": "https://learn-something.dev/schemas/feedback.json",
   "title": "Module Feedback",
   "description": "Schema for srs/feedback.json — learner ratings and content flags",
   "type": "object",

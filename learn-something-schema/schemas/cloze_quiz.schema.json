@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://learn-something.dev/schemas/cloze_quiz.json",
+  "title": "Cloze Quiz",
+  "description": "Schema for cloze.yaml — fill-in-blank questions per module",
+  "type": "array",
+  "items": { "$ref": "#/$defs/cloze_question" },
+  "minItems": 5,
+  "$defs": {
+    "cloze_question": {
+      "title": "Cloze Question",
+      "description": "Schema for a single cloze (fill-in-blank) question",
+      "type": "object",
+      "required": ["id", "question", "answer", "difficulty", "tags"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^c\\.\\d+$",
+          "description": "Question ID: c.{num}, e.g. 'c.1'"
+        },
+        "question": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Sentence with {blank} marking the term to fill in"
+        },
+        "answer": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The correct term to fill in the blank"
+        },
+        "explanation": {
+          "type": "string",
+          "description": "Why this term is correct and matters"
+        },
+        "difficulty": {
+          "type": "integer",
+          "enum": [1, 2, 3],
+          "description": "1=recall, 2=comprehension, 3=application"
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Content tags: terminology, concept, formula, process, comparison"
+        }
+      }
+    }
+  }
+}

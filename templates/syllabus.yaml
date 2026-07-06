@@ -8,106 +8,105 @@ learning_objectives:
   - "[Objective 1]"
   - "[Objective 2]"
   - "[Objective 3]"
-# CILO filter: every module must serve ≥1 objective. If not, skip module.
 
 modules:
   - id: 1
     name: "[Module 1]"
-    time_hours: 2
+    time_hours: 1.5
     prerequisites: []
     topics: [topic1, topic2]
   - id: 2
     name: "[Module 2]"
-    time_hours: 2
+    time_hours: 1.5
     prerequisites: [1]
     topics: [topic1, topic2]
   - id: 3
     name: "[Module 3]"
-    time_hours: 2.5
+    time_hours: 1.5
     prerequisites: [2]
     topics: [topic1, topic2]
   - id: 4
     name: "[Module 4]"
-    time_hours: 2
+    time_hours: 1.5
     prerequisites: [2, 3]
     topics: [topic1, topic2]
   - id: 5
     name: "[Module 5]"
-    time_hours: 2
+    time_hours: 1.5
     prerequisites: [3]
     topics: [topic1, topic2]
   - id: 6
     name: "[Module 6]"
-    time_hours: 2.5
+    time_hours: 1.5
     prerequisites: [4]
     topics: [topic1, topic2]
   - id: 7
     name: "[Module 7]"
-    time_hours: 2
+    time_hours: 1.5
     prerequisites: [4, 5]
     topics: [topic1, topic2]
   - id: 8
     name: "[Module 8]"
-    time_hours: 2
+    time_hours: 1.5
     prerequisites: [6]
     topics: [topic1, topic2]
   - id: 9
     name: "[Module 9]"
-    time_hours: 2.5
+    time_hours: 1.5
     prerequisites: [7]
     topics: [topic1, topic2]
   - id: 10
     name: "[Module 10]"
-    time_hours: 2
+    time_hours: 1.5
     prerequisites: [8, 9]
     topics: [topic1, topic2]
   - id: 11
     name: "[Module 11]"
-    time_hours: 2
+    time_hours: 1.5
     prerequisites: [9]
     topics: [topic1, topic2]
   - id: 12
     name: "[Module 12]"
-    time_hours: 2.5
+    time_hours: 1.5
     prerequisites: [10]
     topics: [topic1, topic2]
   - id: 13
     name: "[Module 13]"
-    time_hours: 2
+    time_hours: 1.5
     prerequisites: [11]
     topics: [topic1, topic2]
   - id: 14
     name: "[Module 14]"
-    time_hours: 2
+    time_hours: 1.5
     prerequisites: [12]
     topics: [topic1, topic2]
   - id: 15
     name: "[Module 15]"
-    time_hours: 2
+    time_hours: 1.5
     prerequisites: [13, 14]
     topics: [topic1, topic2]
   - id: 16
     name: "[Module 16]"
-    time_hours: 2.5
+    time_hours: 1.5
     prerequisites: [14]
     topics: [topic1, topic2]
   - id: 17
     name: "[Module 17]"
-    time_hours: 2
+    time_hours: 1.5
     prerequisites: [15, 16]
     topics: [topic1, topic2]
   - id: 18
     name: "[Module 18]"
-    time_hours: 2
+    time_hours: 1.5
     prerequisites: [16]
     topics: [topic1, topic2]
   - id: 19
     name: "[Module 19]"
-    time_hours: 2
+    time_hours: 1.5
     prerequisites: [17, 18]
     topics: [topic1, topic2]
   - id: 20
     name: "[Module 20: Capstone]"
-    time_hours: 2.5
+    time_hours: 1.5
     prerequisites: [18, 19]
     topics: [integration]

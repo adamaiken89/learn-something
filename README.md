@@ -1,14 +1,8 @@
-# Learn Anything
+# Learn Something
 
-Structured learning framework for any subject — study via CLI with spaced repetition (SM-2). Three-theory pedagogy: Marva Collins, Feynman Technique, Desirable Difficulties.
+Structured learning framework for any subject — study via CLI with spaced repetition (FSRS-5). Three-theory pedagogy: Marva Collins, Feynman Technique, Desirable Difficulties.
 
-## Features
-
-- **Interactive curriculum creation**: LLM-driven syllabus + lesson + MCQ generation
-- **CLI study system**: read lessons, Feynman explain-back, MCQ drills, spaced repetition
-- **SM-2 spaced repetition**: optimal recall intervals, mixed-module interleaving
-- **Cost-effective**: ~$0.10 per course creation, $0 per study session
-- **Portable**: Markdown files importable into Anki, Obsidian, Notion
+Full spec: creation protocol, pedagogy, session types, subject schema, quality rules → `SKILL.md`. Learner session quick-reference → `study-protocol.md`.
 
 ## Quick Start
 
@@ -24,43 +18,11 @@ learn.sh start <subject>         Show overview + modules
 learn.sh quiz <subject> <mod>    MCQ drill
 learn.sh explain <subject> <mod> Feynman technique prompt
 learn.sh feynman <subject> <mod> Alias for explain
-learn.sh review <subject>        SM-2 spaced repetition
+learn.sh review <subject>        FSRS-5 spaced repetition
 learn.sh stats <subject>         Progress + retention
 learn.sh export <subject>        Anki CSV export
 learn.sh epub <subject> [file]   Export course to EPUB book
 ```
-
-## Subject Structure
-
-```
-subjects/<topic>/
-├── syllabus.yaml       # Course spec
-├── modules/
-│   ├── NN-name/
-│   │   ├── lesson.md   # Core content, examples, reframe prompts
-│   │   └── quiz.yaml   # 8-10 MCQs
-│   └── ...
-└── srs/
-    ├── deck.json       # SM-2 card state
-    └── stats.json      # Study history
-```
-
-## Pedagogy
-
-| Theory | Role |
-|--------|------|
-| **Marva Collins** | Rigor, repetition, high expectations. Read thoroughly, answer precisely. |
-| **Feynman Technique** | Explain simply → find gaps → refine. Teach concept to imaginary child. |
-| **Desirable Difficulties** | Spaced repetition, interleaved modules, varied MCQ difficulty. |
-
-## Session Types
-
-| Session | Duration | Focus |
-|---------|----------|-------|
-| **LEARN** | 45-60 min | Read lesson, reframe, MCQ drill |
-| **EXPLAIN** | 15-20 min | Feynman explain-back, AI gap detection |
-| **REVIEW** | 10-15 min | SM-2 spaced repetition (daily) |
-| **MIXED** | 30-45 min | REVIEW + LEARN + EXPLAIN combined |
 
 ## EPUB Generation
 
@@ -74,7 +36,7 @@ learn.sh epub-verify <subject>       # Validate EPUB structure
 
 ### Agent workflow
 
-1. Create all modules via content creation protocol (Section 3)
+1. Create all modules via content creation protocol (SKILL.md Part A4)
 2. Run `learn.sh epub <subject>` to assemble lessons + quizzes into single EPUB
    - Script collects all `lesson.md` + `quiz.yaml` → writes `book.md` → generates EPUB
 3. Run `learn.sh epub-verify <subject>` to validate output
@@ -86,12 +48,12 @@ Manual alternative: `epub.py build <subject-dir> <output>` or `epub.py from-md <
 
 Powered by **DeepSeek V4 Flash**.
 
-| Phase | Cost |
-|-------|------|
-| Scope + syllabus | ~$0.01 |
+| Phase                    | Cost    |
+| ------------------------ | ------- |
+| Scope + syllabus         | ~$0.01  |
 | Per module (~15K tokens) | ~$0.004 |
-| Full course (20 modules) | ~$0.08 |
-| Per study session | $0 |
+| Full course (20 modules) | ~$0.08  |
+| Per study session        | $0      |
 
 ## License
 

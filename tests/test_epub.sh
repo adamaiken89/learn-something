@@ -25,7 +25,7 @@ mkdir -p "$TEST_SUBJECT/modules/01-test-module"
 cat > "$TEST_SUBJECT/modules/01-test-module/lesson.md" << 'EOF'
 # Test Module
 
-## Introduction
+## Getting Started
 
 This is a test module.
 
@@ -61,10 +61,10 @@ with zipfile.ZipFile(path, 'r') as zf:
     nav = zf.read('EPUB/nav.xhtml').decode('utf-8')
     checks = [
         'Test Module' in nav,         # chapter title
-        'Introduction' in nav,        # h2 in ToC
-        'Setup' in nav,               # h3 in ToC
+        'Getting Started' in nav,     # h2 in ToC
+        'Setup' in nav,               # h3 nested under Getting Started
         'Advanced' in nav,            # h2 in ToC
-        'href=\"ch001.xhtml#introduction\"' in nav,
+        'href=\"ch001.xhtml#getting-started\"' in nav,
         'href=\"ch001.xhtml#setup\"' in nav,
         'href=\"ch001.xhtml#advanced\"' in nav,
         'href=\"ch001.xhtml\"' in nav,

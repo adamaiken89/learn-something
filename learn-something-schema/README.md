@@ -1,18 +1,18 @@
-# @learn-anything/schema
+# @learn-something/schema
 
-Shared JSON Schema definitions for the learn-anything ecosystem. Both the CLI (`learn.py`) and the desktop reader validate against these schemas.
+Shared JSON Schema definitions for the learn-something ecosystem. Both the CLI (`learn.py`) and the desktop reader validate against these schemas.
 
 ## Schemas
 
-| Schema | File | Description |
-|--------|------|-------------|
-| `deck` | `schemas/deck.schema.json` | SRS card deck (`srs/deck.json`) |
-| `card` | `schemas/card.schema.json` | Individual SRS card |
-| `quiz` | `schemas/quiz.schema.json` | Quiz questions (`quiz.yaml`) |
-| `question` | `schemas/question.schema.json` | Single quiz question |
-| `syllabus` | `schemas/syllabus.schema.json` | Course syllabus (`syllabus.yaml`) |
-| `stats` | `schemas/stats.schema.json` | Session history (`srs/stats.json`) |
-| `feedback` | `schemas/feedback.json` | Module ratings and flags |
+| Schema     | File                           | Description                        |
+| ---------- | ------------------------------ | ---------------------------------- |
+| `deck`     | `schemas/deck.schema.json`     | SRS card deck (`srs/deck.json`)    |
+| `card`     | `schemas/card.schema.json`     | Individual SRS card                |
+| `quiz`     | `schemas/quiz.schema.json`     | Quiz questions (`quiz.yaml`)       |
+| `question` | `schemas/question.schema.json` | Single quiz question               |
+| `syllabus` | `schemas/syllabus.schema.json` | Course syllabus (`syllabus.yaml`)  |
+| `stats`    | `schemas/stats.schema.json`    | Session history (`srs/stats.json`) |
+| `feedback` | `schemas/feedback.json`        | Module ratings and flags           |
 
 ## Key Design Decisions
 
@@ -36,7 +36,7 @@ python validate/python/validate.py syllabus path/to/syllabus.yaml
 ### TypeScript
 
 ```typescript
-import { validateDeck, validateQuiz } from '@learn-anything/schema/validate';
+import { validateDeck, validateQuiz } from '@learn-something/schema/validate';
 
 const errors = validateDeck(deckData);
 if (errors.length > 0) {

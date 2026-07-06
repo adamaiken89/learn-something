@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://learn-anything.dev/schemas/stats.json",
+  "$id": "https://learn-something.dev/schemas/stats.json",
   "title": "Session Stats",
   "description": "Schema for srs/stats.json — quiz and review session history",
   "type": "object",

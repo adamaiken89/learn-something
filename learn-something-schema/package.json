@@ -1,7 +1,7 @@
 {
-  "name": "@learn-anything/schema",
+  "name": "@learn-something/schema",
   "version": "1.0.0",
-  "description": "Shared JSON Schema definitions for learn-anything ecosystem",
+  "description": "Shared JSON Schema definitions for learn-something ecosystem",
   "main": "types/index.ts",
   "types": "types/index.ts",
   "files": [
@@ -13,6 +13,6 @@
     "validate": "python3 validate/python/validate.py",
     "check": "tsc --noEmit types/index.ts"
   },
-  "keywords": ["learn-anything", "schema", "srs", "spaced-repetition"],
+  "keywords": ["learn-something", "schema", "srs", "spaced-repetition"],
   "license": "MIT"
 }

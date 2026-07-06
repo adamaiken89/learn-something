@@ -1,23 +1,23 @@
 - id: "N.1"
   question: "[Basic terminology question]"
   options:
-    A: "[Distractor]"
-    B: "[Correct]"
-    C: "[Distractor]"
-    D: "[Distractor]"
-  answer: B
-  explanation: "[Why B correct, why others wrong]"
+    a: "[Distractor]"
+    b: "[Correct]"
+    c: "[Distractor]"
+    d: "[Distractor]"
+  answer: b
+  explanation: "[Why b correct, why others wrong]"
   difficulty: 1
   tags: [terminology]
 
 - id: "N.2"
   question: "[Apply concept question]"
   options:
-    A: "[Distractor]"
-    B: "[Distractor]"
-    C: "[Correct]"
-    D: "[Distractor]"
-  answer: C
+    a: "[Distractor]"
+    b: "[Distractor]"
+    c: "[Correct]"
+    d: "[Distractor]"
+  answer: c
   explanation: "[Reasoning chain]"
   difficulty: 2
   tags: [application]
@@ -25,17 +25,11 @@
 - id: "N.3"
   question: "[Scenario-based question]"
   options:
-    A: "[Correct]"
-    B: "[Distractor]"
-    C: "[Distractor]"
-    D: "[Distractor]"
-  answer: A
+    a: "[Correct]"
+    b: "[Distractor]"
+    c: "[Distractor]"
+    d: "[Distractor]"
+  answer: a
   explanation: "[Scenario logic]"
   difficulty: 3
   tags: [scenario]
-
-# Difficulty: 1=recall, 2=comprehension, 3=application
-# Tags: terminology, concept, formula, scenario, comparison, calculation
-# 40% difficulty 1, 40% diff 2, 20% diff 3
-# Exactly 4 options, 1 correct
-# At least 1 question per learning objective

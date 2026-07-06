@@ -4,8 +4,17 @@ set -euo pipefail
 SKILL_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 FAILED=0
 
+# ── Install Python deps if missing ──────────────────────────────
+if ! python3 -c "import typer" 2>/dev/null; then
+    echo "Installing Python dependencies (typer, click, pyyaml)..."
+    pip3 install --break-system-packages --quiet -r "$SKILL_DIR/requirements.txt" \
+        2>&1 | tail -5 || {
+        echo "WARNING: pip install failed — some tests may be skipped"
+    }
+fi
+
 echo "========================================="
-echo " Learn Anything — Test Suite"
+echo " Learn Something — Test Suite"
 echo "========================================="
 
 # --- Python unit tests ---

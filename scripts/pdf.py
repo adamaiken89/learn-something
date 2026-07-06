@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """PDF builder with zero-dep fallback + optional weasyprint.
 
-Builds PDF from Learn Anything subject directory or markdown file.
+Builds PDF from Learn Something subject directory or markdown file.
 Backend priority: weasyprint (CSS-styled) → pandoc → stdlib-only text PDF.
 
 Usage:
@@ -222,7 +222,7 @@ class RawPDF:
     PAGE_WRITE = PAGE_W - MARGIN_L - MARGIN_R
     CHARS_PER_LINE = 72
 
-    def __init__(self, title='Document', author='Learn Anything'):
+    def __init__(self, title='Document', author='Learn Something'):
         self.title = title
         self.author = author
         self.objs = []
@@ -305,7 +305,7 @@ class RawPDF:
         self._obj(
             f'<< /Title ({_escape_pdf(self.title)})'
             f' /Author ({_escape_pdf(self.author)})'
-            f' /Producer (Learn Anything)'
+            f' /Producer (Learn Something)'
             f' /CreationDate ({datetime.now().strftime("%Y%m%d%H%M%S")}) >>'
         )
 
@@ -372,7 +372,7 @@ class RawPDF:
             self._render_page(page_items)
 
 
-def _generate_raw_pdf(md_text, output_path, title='Document', author='Learn Anything'):
+def _generate_raw_pdf(md_text, output_path, title='Document', author='Learn Something'):
     plain_lines = _md_to_plain_lines(md_text)
     pdf = RawPDF(title=title, author=author)
     data = pdf.build(plain_lines)
@@ -397,7 +397,7 @@ def _html_to_pdf_via_pandoc(html, output_path):
         raise RuntimeError(f'pandoc failed: {p.stderr}')
 
 
-def _make_html(md_text, title='Document', author='Learn Anything'):
+def _make_html(md_text, title='Document', author='Learn Something'):
     lines = []
     lines.append('<!DOCTYPE html>')
     lines.append('<html><head>')
@@ -487,7 +487,7 @@ def _make_html(md_text, title='Document', author='Learn Anything'):
     return '\n'.join(lines)
 
 
-def generate_pdf(md_text, output_path, title='Document', author='Learn Anything', engine='auto'):
+def generate_pdf(md_text, output_path, title='Document', author='Learn Something', engine='auto'):
     os.makedirs(os.path.dirname(os.path.abspath(output_path)) or '.', exist_ok=True)
 
     if engine == 'auto':
@@ -521,14 +521,14 @@ def generate_pdf(md_text, output_path, title='Document', author='Learn Anything'
 
 
 def main():
-    parser = argparse.ArgumentParser(description='PDF builder for Learn Anything')
+    parser = argparse.ArgumentParser(description='PDF builder for Learn Something')
     sub = parser.add_subparsers(dest='command')
 
     p_build = sub.add_parser('build', help='Build PDF from subject directory')
     p_build.add_argument('subject_dir')
     p_build.add_argument('output')
     p_build.add_argument('--title', default=None)
-    p_build.add_argument('--author', default='Learn Anything')
+    p_build.add_argument('--author', default='Learn Something')
     p_build.add_argument(
         '--engine',
         default='auto',
@@ -540,7 +540,7 @@ def main():
     p_md.add_argument('markdown_file')
     p_md.add_argument('output')
     p_md.add_argument('--title', default=None)
-    p_md.add_argument('--author', default='Learn Anything')
+    p_md.add_argument('--author', default='Learn Something')
     p_md.add_argument(
         '--engine',
         default='auto',

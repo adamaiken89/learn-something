@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Validate learn-anything data files against shared JSON schemas.
+Validate learn-something data files against shared JSON schemas.
 
 Usage:
     python validate.py deck <path_to_deck.json>
@@ -79,7 +79,7 @@ def main():
     schema_name = sys.argv[1]
     filepath = sys.argv[2]
 
-    valid_schemas = ['deck', 'quiz', 'syllabus', 'stats', 'feedback', 'card', 'question']
+    valid_schemas = ['deck', 'quiz', 'cumulative_quiz', 'syllabus', 'stats', 'feedback', 'card', 'question', 'cumulative_question', 'cloze_quiz', 'cloze_question']
     if schema_name not in valid_schemas:
         print(f'Unknown schema: {schema_name}')
         print(f'Valid schemas: {", ".join(valid_schemas)}')

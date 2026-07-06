@@ -59,7 +59,7 @@ jobs:
       - name: Build skill tarball
         run: |
           VERSION=$(cat VERSION | tr -d '[:space:]')
-          SKILL_NAME="learn-anything"
+          SKILL_NAME="learn-something"
           BUILD_DIR="${SKILL_NAME}-${VERSION}"
           TARBALL="${SKILL_NAME}-${VERSION}.tar.gz"
 
@@ -76,8 +76,8 @@ jobs:
       - name: Build EPUB
         run: |
           VERSION=$(cat VERSION | tr -d '[:space:]')
-          EPUB="learn-anything-${VERSION}-docs.epub"
-          python scripts/epub.py from-md SKILL.md "$EPUB" --title "Learn Anything v${VERSION}"
+          EPUB="learn-something-${VERSION}-docs.epub"
+          python scripts/epub.py from-md SKILL.md "$EPUB" --title "Learn Something v${VERSION}"
           echo "EPUB=$EPUB" >> "$GITHUB_ENV"
 
       - name: Create GitHub Release
@@ -93,18 +93,18 @@ jobs:
 
             ### Assets
 
-            - **learn-anything-${{ github.ref_name }}.tar.gz** — skill archive (extract to `~/.config/opencode/skills/` or `~/.claude/skills/`)
-            - **learn-anything-${{ github.ref_name }}-docs.epub** — offline documentation
+            - **learn-something-${{ github.ref_name }}.tar.gz** — skill archive (extract to `~/.config/opencode/skills/` or `~/.claude/skills/`)
+            - **learn-something-${{ github.ref_name }}-docs.epub** — offline documentation
 
             ### Install
 
             ```bash
             # Option 1: Clone
-            git clone --branch ${{ github.ref_name }} https://github.com/${{ github.repository }}.git ~/.config/opencode/skills/learn-anything
+            git clone --branch ${{ github.ref_name }} https://github.com/${{ github.repository }}.git ~/.config/opencode/skills/learn-something
 
             # Option 2: Download tarball
             curl -L https://github.com/${{ github.repository }}/archive/refs/tags/${{ github.ref_name }}.tar.gz | tar xz -C ~/.config/opencode/skills/
-            mv ~/.config/opencode/skills/learn-anything-${{ github.ref_name }} ~/.config/opencode/skills/learn-anything
+            mv ~/.config/opencode/skills/learn-something-${{ github.ref_name }} ~/.config/opencode/skills/learn-something
             ```
           files: |
             ${{ env.TARBALL }}

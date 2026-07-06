@@ -1,0 +1,109 @@
+- id: "cum.1"
+  type: mcq
+  question: "[Cross-module question connecting concepts from multiple modules]"
+  source_modules: [1, 2]
+  options:
+    a: "[Distractor]"
+    b: "[Correct]"
+    c: "[Distractor]"
+    d: "[Distractor]"
+  answer: b
+  explanation: "[Why b correct, referencing concepts from both modules]"
+  difficulty: 2
+  tags: [cross-module, terminology]
+
+- id: "cum.2"
+  type: mcq
+  question: "[Application question spanning modules]"
+  source_modules: [2, 3]
+  options:
+    a: "[Distractor]"
+    b: "[Distractor]"
+    c: "[Correct]"
+    d: "[Distractor]"
+  answer: c
+  explanation: "[Reasoning chain across modules]"
+  difficulty: 2
+  tags: [cross-module, application]
+
+- id: "cum.3"
+  type: mcq
+  question: "[Scenario combining knowledge from modules]"
+  source_modules: [1, 3]
+  options:
+    a: "[Correct]"
+    b: "[Distractor]"
+    c: "[Distractor]"
+    d: "[Distractor]"
+  answer: a
+  explanation: "[Scenario logic referencing multiple modules]"
+  difficulty: 3
+  tags: [cross-module, scenario]
+
+- id: "cum.4"
+  type: mcq
+  question: "[Comparison across modules]"
+  source_modules: [2, 4]
+  options:
+    a: "[Distractor]"
+    b: "[Distractor]"
+    c: "[Distractor]"
+    d: "[Correct]"
+  answer: d
+  explanation: "[Why d correct]"
+  difficulty: 2
+  tags: [cross-module, comparison]
+
+- id: "cum.5"
+  type: cloze
+  question: "Complete: [sentence connecting concepts from modules with {blank}]"
+  source_modules: [1, 2]
+  answer: "[blank term]"
+  explanation: "[Why this term, referencing both modules]"
+  difficulty: 1
+  tags: [cross-module, recall]
+
+- id: "cum.6"
+  type: cloze
+  question: "Complete: [another cross-module sentence with {blank}]"
+  source_modules: [3, 4]
+  answer: "[blank term]"
+  explanation: "[Why this term]"
+  difficulty: 1
+  tags: [cross-module, recall]
+
+- id: "cum.7"
+  type: cloze
+  question: "Complete: [synthesis sentence with {blank}]"
+  source_modules: [2, 5]
+  answer: "[blank term]"
+  explanation: "[Why this term]"
+  difficulty: 2
+  tags: [cross-module, synthesis]
+
+- id: "cum.8"
+  type: tf
+  statement: "[Statement combining concepts from multiple modules]"
+  source_modules: [1, 3]
+  answer: true
+  explanation: "[Why true, referencing specific concepts from each module]"
+  difficulty: 1
+  tags: [cross-module, conceptual]
+
+- id: "cum.9"
+  type: tf
+  statement: "[Plausible but incorrect statement spanning modules]"
+  source_modules: [2, 4]
+  answer: false
+  explanation: "[Why false, explaining the misconception]"
+  difficulty: 2
+  tags: [cross-module, misconception]
+
+- id: "cum.10"
+  type: tf
+  statement: "[Advanced statement requiring synthesis]"
+  source_modules: [3, 5]
+  answer: true
+  explanation: "[Why true, with detailed reasoning]"
+  difficulty: 3
+  tags: [cross-module, synthesis]

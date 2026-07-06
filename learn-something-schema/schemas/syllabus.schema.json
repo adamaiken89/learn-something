@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://learn-anything.dev/schemas/syllabus.json",
+  "$id": "https://learn-something.dev/schemas/syllabus.json",
   "title": "Course Syllabus",
   "description": "Schema for syllabus.yaml — course skeleton with module metadata",
   "type": "object",
@@ -8,7 +8,8 @@
   "properties": {
     "subject": {
       "type": "string",
-      "description": "Course title"
+      "pattern": "^(?![a-z0-9]+(-[a-z0-9]+)*$).*$",
+      "description": "Course title (human-readable; rejects raw slugs like 'foo-bar')"
     },
     "language": {
       "type": "string",
@@ -17,8 +18,8 @@
     },
     "time_budget_hours": {
       "type": "number",
-      "maximum": 40,
-      "description": "Total estimated study hours"
+      "maximum": 200,
+      "description": "Total estimated study hours (guideline: 40h)"
     },
     "target_level": {
       "type": "string",
@@ -60,8 +61,8 @@
         },
         "time_hours": {
           "type": "number",
-          "maximum": 3,
-          "description": "Estimated study hours for this module"
+          "maximum": 1.5,
+          "description": "Estimated study hours for this module (hard cap: 1.5h regardless of level)"
         },
         "prerequisites": {
           "type": "array",

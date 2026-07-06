@@ -1,9 +1,0 @@
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://learn-anything.dev/schemas/quiz.json",
-  "title": "Quiz Questions",
-  "description": "Schema for quiz.yaml — multiple choice questions per module",
-  "type": "array",
-  "items": { "$ref": "#/$defs/question" },
-  "minItems": 1
-}

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Learn Anything CLI — study with spaced repetition (SM-2).
+"""Learn Something CLI — study with spaced repetition (FSRS-5).
 
 Usage:
   learn.py init <topic> [lang] [--depth survey|standard|deep] [--pretest]
@@ -22,9 +22,9 @@ Usage:
    learn.py epub-verify <topic> [output]
    learn.py pdf <topic> [output] [--engine auto|weasyprint|pandoc|raw]
    learn.py pdf-regen <topic> [output] [--engine auto|weasyprint|pandoc|raw]
+   learn.py validate-content <topic> [module]
 """
 
-import argparse
 import csv
 import json
 import os
@@ -36,8 +36,15 @@ import sys
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 import sm2 as _sm2
+import typer
+
+try:
+    import yaml
+except ImportError:
+    yaml = None
 
 # ── Paths ──────────────────────────────────────────────────────
 
@@ -68,7 +75,7 @@ CYAN = cval(C.CYAN)
 BOLD = cval(C.BOLD)
 NC = cval(C.NC)
 
-# ── SM-2 Algorithm ─────────────────────────────────────────────
+# ── SRS Algorithm ──────────────────────────────────────────────
 
 sm2_update = _sm2.update
 
@@ -88,6 +95,9 @@ def _check_topic(topic):
     return path
 
 
+MODULE_ID_RE = re.compile(r'^\d{2}-[a-z0-9]+(-[a-z0-9]+)*$')
+
+
 def _module_path(topic, module):
     return _topic_path(topic) / 'modules' / module
 
@@ -97,6 +107,8 @@ def _check_module(topic, module):
     if not path.exists():
         print(f"{RED}Module '{module}' not found in '{topic}'{NC}")
         sys.exit(1)
+    if not MODULE_ID_RE.match(module):
+        print(f"{YELLOW}Warning: '{module}' doesn't follow NN-name convention (e.g., 01-intro){NC}")
     return path
 
 
@@ -111,15 +123,21 @@ _DEPTH_PRESETS = {
 }
 
 
+def _pretty_title(topic):
+    """Derive a human-readable title from a kebab/snake topic slug."""
+    return topic.replace('_', ' ').replace('-', ' ').title()
+
+
 def _generate_syllabus(topic, lang, depth):
     """Generate a skeleton syllabus YAML with the given depth."""
     preset = _DEPTH_PRESETS.get(depth, _DEPTH_PRESETS['standard'])
     n = preset['modules']
     t_min, t_max = preset['time_min'], preset['time_max']
     budget = preset['budget']
+    title = _pretty_title(topic)
 
     lines = []
-    lines.append(f'subject: "{topic}"')
+    lines.append(f'subject: "{title}"')
     lines.append(f'language: {lang}')
     lines.append(f'time_budget_hours: {budget}')
     lines.append('target_level: intermediate')
@@ -132,19 +150,33 @@ def _generate_syllabus(topic, lang, depth):
     lines.append('')
     lines.append('modules:')
 
+    # Generate meaningful module names based on position
+    def _module_name(idx, total):
+        if idx == 1:
+            return f'Introduction to {title}'
+        elif idx == total:
+            return f'{title}: Review and Practice'
+        elif idx == 2:
+            return f'{title}: Core Concepts'
+        elif idx <= total // 3:
+            return f'{title}: Fundamentals {idx}'
+        elif idx <= 2 * total // 3:
+            return f'{title}: Intermediate Topics'
+        else:
+            return f'{title}: Advanced Topics'
+
     for i in range(1, n + 1):
         t = round(random.uniform(t_min, t_max), 1)
         # Build prerequisites: depends on earlier modules
         prereqs = []
         if i > 1:
-            # First module has no prereqs, rest depend on 1-2 earlier ones
             candidates = list(range(1, i))
             if len(candidates) > 2:
-                candidates = candidates[-2:]  # last 1-2 as prereqs
+                candidates = candidates[-2:]
             prereqs = random.sample(candidates, min(len(candidates), 2))
             prereqs.sort()
 
-        name = f'[Module {i}]'
+        name = _module_name(i, n)
         lines.append(f'  - id: {i}')
         lines.append(f'    name: "{name}"')
         lines.append(f'    time_hours: {t}')
@@ -170,14 +202,13 @@ def _run_pretest(topic):
         return
 
     print(f'  {len(module_names)} modules found. Testing 1 question each.\n')
+    print('  Rate your knowledge for each module: y = I know this well, n = keep in plan\n')
 
     skip_count = 0
     skip_modules = []
     for i, name in enumerate(module_names, 1):
-        # Generate a placeholder question prompt
         print(f'  [{i}/{len(module_names)}] Module: {name}')
-        print('    (In a real session, the AI generates a question here.)')
-        print('    Type y if you know this, n to keep in your plan, s to skip: ', end='')
+        print('    Are you comfortable with the basics of this topic? (y/n): ', end='')
 
         try:
             answer = input().strip().lower()
@@ -188,7 +219,7 @@ def _run_pretest(topic):
         if answer in ('y', 'yes', 's', 'skip'):
             skip_count += 1
             skip_modules.append(name)
-            print('    -> Marked as known\n')
+            print(f'    -> Will skip "{name}"\n')
         else:
             print('    -> Kept in plan\n')
 
@@ -313,19 +344,47 @@ def _save_feedback(topic, feedback):
         json.dump(feedback, f, indent=2)
 
 
+# ── Schema validation helpers ────────────────────────────────────
+
+SCHEMA_DIR = SKILL_DIR / 'learn-something-schema' / 'schemas'
+
+
+def _try_validate(data, schema_name):
+    """Validate data against JSON schema. Returns errors list, empty if valid.
+    Warns (does not skip silently) if jsonschema not installed."""
+    try:
+        import jsonschema
+    except ImportError:
+        print(f'{YELLOW}WARNING: jsonschema not installed. Install: pip install jsonschema{NC}')
+        print(f'{YELLOW}Schema validation skipped.{NC}')
+        return []
+    schema_path = SCHEMA_DIR / f'{schema_name}.schema.json'
+    if not schema_path.exists():
+        return [f'Schema not found: {schema_path}']
+    with open(schema_path) as f:
+        schema = json.load(f)
+    validator = jsonschema.Draft202012Validator(schema)
+    errors = []
+    for error in sorted(validator.iter_errors(data), key=lambda e: list(e.path)):
+        path = '.'.join(str(p) for p in error.absolute_path)
+        prefix = f'{path}: ' if path else ''
+        errors.append(f'{prefix}{error.message}')
+    return errors
+
+
 # ── Adaptive quiz helpers ───────────────────────────────────────
 
 
 def _find_card(cards, qid, topic, module):
     """Find a card in the dict by question ID, trying various ID formats."""
-    # Try direct match on questionId
+    # O(1) direct key lookup — card key is {topic}-{module}-{questionId}
+    direct_key = f'{topic}-{module}-{qid}'
+    if direct_key in cards:
+        return cards[direct_key]
+    # O(n) fallback: scan for questionId match (legacy/alternate formats)
     for card in cards.values():
         if card.get('questionId') == qid:
             return card
-    # Try legacy format: module.num
-    legacy_id = f'{topic}-{module}-{qid}'
-    if legacy_id in cards:
-        return cards[legacy_id]
     return {}
 
 
@@ -346,10 +405,8 @@ def _adaptive_sort(questions, cards, topic, module):
 # ── Commands ────────────────────────────────────────────────────
 
 
-def cmd_init(args):
-    topic = args.topic
-    lang = args.lang or 'en'
-    depth = getattr(args, 'depth', 'standard')
+def cmd_init(topic: str, lang: str = 'en', depth: str = 'standard', pretest: bool = False):
+    lang = lang or 'en'
     path = _topic_path(topic)
     if path.exists():
         print(f'{RED}Topic "{topic}" already exists. Pick a different name.{NC}')
@@ -376,13 +433,12 @@ def cmd_init(args):
         f'Edit syllabus.yaml, then create modules with: learn.py create-module {topic} <module-id>'
     )
 
-    if getattr(args, 'pretest', False):
+    if pretest:
         print(f'\n{CYAN}Pre-test: answering a few questions to skip what you know...{NC}')
         _run_pretest(topic)
 
 
-def cmd_start(args):
-    topic = args.topic
+def cmd_start(topic: str):
     spath = _check_topic(topic)
 
     syllabus = spath / 'syllabus.yaml'
@@ -417,15 +473,19 @@ def cmd_start(args):
     print(f'Review:     learn.py review {topic}')
 
 
-def cmd_create_module(args):
-    topic = args.topic
-    module_id = args.module_id
-    name = args.name or module_id
+def cmd_create_module(topic: str, module_id: str, name: Optional[str] = None):
+    name = name or module_id
     _check_topic(topic)
 
     mod_path = _module_path(topic, module_id)
     if mod_path.exists():
         print(f"{RED}Module '{module_id}' already exists in '{topic}'{NC}")
+        sys.exit(1)
+
+    if not MODULE_ID_RE.match(module_id):
+        print(
+            f"{RED}Invalid module ID '{module_id}'. Must be: NN-name (e.g., 01-intro, 02-core-concepts){NC}"
+        )
         sys.exit(1)
 
     mod_path.mkdir(parents=True, exist_ok=True)
@@ -448,13 +508,30 @@ def cmd_create_module(args):
     print(f'{GREEN}Created module: {mod_path}{NC}')
     print('  lesson.md — edit content')
     print('  quiz.yaml — add 8-10 MCQs')
+    print('  cloze.yaml — add 8-10 cloze questions')
 
 
-def cmd_quiz(args):
-    topic = args.topic
-    module = args.module
-    adaptive = getattr(args, 'adaptive', False)
-    weak_only = getattr(args, 'weak_only', False)
+def cmd_create_cloze(topic: str, module: str):
+    """Create cloze.yaml from template for a module."""
+    _check_topic(topic)
+    _check_module(topic, module)
+
+    cloze_path = _module_path(topic, module) / 'cloze.yaml'
+    if cloze_path.exists():
+        print(f'{YELLOW}cloze.yaml already exists at {cloze_path}{NC}')
+        sys.exit(1)
+
+    cloze_tpl = SKILL_DIR / 'templates' / 'cloze.yaml'
+    if cloze_tpl.exists():
+        shutil.copy2(cloze_tpl, cloze_path)
+        print(f'{GREEN}Created: {cloze_path}{NC}')
+        print('  Edit to add 8-10 cloze questions')
+    else:
+        print(f'{RED}Template not found at {cloze_tpl}{NC}')
+        sys.exit(1)
+
+
+def cmd_quiz(topic: str, module: str, adaptive: bool = False, weak_only: bool = False):
     _check_topic(topic)
     _check_module(topic, module)
 
@@ -474,6 +551,13 @@ def cmd_quiz(args):
 
     with open(quiz_path) as f:
         questions = yaml.safe_load(f)
+
+    if isinstance(questions, dict):
+        print(
+            f'{RED}Invalid quiz.yaml shape: expected top-level list, got dict with {list(questions.keys())}{NC}'
+        )
+        print(f'{YELLOW}Run: python {SKILL_DIR}/scripts/migrate_courses.py {topic} --apply{NC}')
+        sys.exit(1)
 
     if not questions:
         print(f'{YELLOW}No questions in quiz{NC}')
@@ -576,7 +660,7 @@ def cmd_quiz(args):
             print(f'  {explanation}')
         print()
 
-        # ── SRS update: create or update card with SM-2 ──
+        # ── SRS update: create or update card with FSRS-5 ──
         card_id = f'{topic}-{module}-{qid}'
         existing = cards.get(card_id) or _find_card(cards, qid, topic, module)
 
@@ -611,9 +695,306 @@ def cmd_quiz(args):
     _record_session(topic, 'quiz', module=module, score=correct, total=shown)
 
 
-def cmd_explain(args):
-    topic = args.topic
-    module = args.module
+def cmd_cloze(topic: str, module: str, adaptive: bool = False, weak_only: bool = False):
+    """Run cloze (fill-in-blank) quiz for a module."""
+    _check_topic(topic)
+    _check_module(topic, module)
+
+    cloze_path = _module_path(topic, module) / 'cloze.yaml'
+    if not cloze_path.exists():
+        print(f'{RED}No cloze.yaml found at {cloze_path}{NC}')
+        print(f'{YELLOW}Run: learn.py create-cloze {topic} {module}{NC}')
+        sys.exit(1)
+
+    try:
+        import yaml
+    except ImportError:
+        print(f'{RED}Python yaml library required. Install: pip install pyyaml{NC}')
+        print(f'{YELLOW}Raw cloze content:{NC}')
+        with open(cloze_path) as f:
+            print(f.read())
+        sys.exit(1)
+
+    with open(cloze_path) as f:
+        questions = yaml.safe_load(f)
+
+    if not questions:
+        print(f'{YELLOW}No cloze questions found{NC}')
+        return
+
+    deck = _load_deck(topic)
+    cards = deck.get('cards', {})
+
+    # Filter to weak cards only if requested
+    if weak_only:
+        questions = [
+            q
+            for q in questions
+            if _find_card(cards, q.get('id', ''), topic, module).get('easeFactor', 2.5) < 2.0
+        ]
+        if not questions:
+            print(f'{GREEN}No weak cloze cards found. All cards have easeFactor >= 2.0{NC}')
+            return
+
+    # Sort questions
+    if adaptive:
+        questions = _adaptive_sort(questions, cards, topic, module)
+        print(f'{CYAN}=== {topic} / {module} Adaptive Cloze Quiz ==={NC}\n')
+    else:
+        random.shuffle(questions)
+        print(f'{CYAN}=== {topic} / {module} Cloze Quiz ==={NC}\n')
+
+    correct = 0
+    streak = 0
+    current_difficulty = 1
+    seen_ids = set()
+
+    shown = 0
+    total_to_show = len(questions)
+
+    for i, q in enumerate(questions, 1):
+        qid = q.get('id', f'{module}.c.{i}')
+
+        # Anti-repeat: skip if already seen this session
+        if qid in seen_ids:
+            continue
+        seen_ids.add(qid)
+
+        # Adaptive: skip if difficulty too high for current streak
+        if adaptive:
+            q_diff = q.get('difficulty', 1)
+            if q_diff > current_difficulty + 1:
+                continue
+
+        shown += 1
+        print(f'--- Question {shown}/{total_to_show} ---')
+        print(q['question'])
+
+        try:
+            ans = input('\nYour answer: ').strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return
+
+        is_correct = ans.lower() == q.get('answer', '').lower()
+        if is_correct:
+            print(f'{GREEN}✓ Correct!{NC}')
+            quality = 4
+            correct += 1
+            streak += 1
+            # Adaptive: advance difficulty after 3 correct streak
+            if adaptive and streak >= 3 and current_difficulty < 3:
+                current_difficulty += 1
+                streak = 0
+                print(f'  {CYAN}难度提升 → Level {current_difficulty}{NC}')
+        else:
+            print(f'{RED}✗ Wrong. Correct: {q.get("answer", "?")}{NC}')
+            quality = 1
+            streak = 0
+            # Adaptive: drop difficulty on wrong
+            if adaptive and current_difficulty > 1:
+                current_difficulty -= 1
+
+        explanation = q.get('explanation', '')
+        if explanation:
+            print(f'  {explanation}')
+        print()
+
+        # ── SRS update: create or update card with FSRS-5 ──
+        card_id = f'{topic}-{module}-{qid}'
+        existing = cards.get(card_id) or _find_card(cards, qid, topic, module)
+
+        if existing:
+            sm2_update(existing, quality)
+        else:
+            card = {
+                'id': card_id,
+                'questionId': qid,
+                'moduleId': module,
+                'courseId': topic,
+                'question': q['question'],
+                'answer': q.get('answer', ''),
+                'explanation': q.get('explanation', ''),
+                'tags': q.get('tags', []),
+                'easeFactor': 2.5,
+                'interval': 0,
+                'repetitions': 0,
+                'nextReviewDate': datetime.now().strftime('%Y-%m-%d'),
+                'lastReviewed': None,
+                'isStarred': False,
+            }
+            sm2_update(card, quality)
+            cards[card_id] = card
+
+    deck['cards'] = cards
+    _save_deck(topic, deck)
+
+    pct = correct * 100 // shown if shown else 0
+    print(f'\nScore: {correct}/{shown} ({pct}%)')
+    _record_session(topic, 'cloze', module=module, score=correct, total=shown)
+
+
+def cmd_cumulative_quiz(topic: str, modules: Optional[str] = None):
+    """Cross-module quiz: 8-10 questions mixing MCQ, cloze, T/F."""
+    _check_topic(topic)
+
+    quiz_paths = sorted((SUBJECTS_DIR / topic).glob('cumulative_quiz*.yaml'))
+    if not quiz_paths:
+        print(f'{RED}No cumulative_quiz*.yaml found at {SUBJECTS_DIR / topic}{NC}')
+        print(f'{YELLOW}Generate one after completing 3-5 modules.{NC}')
+        sys.exit(1)
+
+    try:
+        import yaml
+    except ImportError:
+        print(f'{RED}Python yaml library required. Install: pip install pyyaml{NC}')
+        sys.exit(1)
+
+    questions = []
+    for qp in quiz_paths:
+        with open(qp) as f:
+            chunk = yaml.safe_load(f)
+        if chunk:
+            questions.extend(chunk)
+
+    if not questions:
+        print(f'{YELLOW}No questions in cumulative quiz{NC}')
+        return
+    if len(quiz_paths) > 1:
+        print(
+            f'{YELLOW}Loaded {len(quiz_paths)} cumulative quizzes ({len(questions)} questions). '
+            f'Use --modules X-Y to target one range.{NC}'
+        )
+
+    # Filter by module range if specified
+    if modules:
+        parts = modules.split('-')
+        try:
+            lo, hi = int(parts[0]), int(parts[-1])
+        except ValueError:
+            print(f'{RED}Invalid module range: {modules}. Use X-Y format.{NC}')
+            sys.exit(1)
+        questions = [
+            q for q in questions if any(lo <= m <= hi for m in q.get('source_modules', []))
+        ]
+        if not questions:
+            print(f'{YELLOW}No questions matching modules {modules}{NC}')
+            return
+
+    deck = _load_deck(topic)
+    cards = deck.get('cards', {})
+    random.shuffle(questions)
+
+    print(f'{CYAN}=== {topic} Cumulative Quiz ==={NC}')
+    if modules:
+        print(f'{CYAN}Modules: {modules}{NC}')
+    print()
+
+    correct = 0
+    shown = 0
+
+    for i, q in enumerate(questions, 1):
+        qid = q.get('id', f'cum.{i}')
+        qtype = q.get('type', 'mcq')
+        source = q.get('source_modules', [])
+        source_str = ', '.join(str(s) for s in source)
+
+        print(f'--- Question {i}/{len(questions)} [{qtype.upper()}] (modules: {source_str}) ---')
+
+        if qtype == 'mcq':
+            print(q['question'])
+            opts = list(q.get('options', {}).items())
+            random.shuffle(opts)
+            keymap = {}
+            for j, (letter, text) in enumerate(opts):
+                key = chr(ord('a') + j)
+                keymap[key] = letter
+                print(f'  {key}) {text}')
+
+            while True:
+                try:
+                    ans = input('\nYour answer: ').strip().lower()
+                except (EOFError, KeyboardInterrupt):
+                    print()
+                    return
+                if ans in keymap:
+                    break
+                print(f'Invalid. Choose {min(keymap)}-{max(keymap)}.')
+
+            is_correct = keymap[ans] == q.get('answer', '')
+            # Add to SRS deck
+            card_id = f'{topic}-cum-{qid}'
+            card = _find_card(cards, qid, topic, 'cumulative')
+            card['question'] = q['question']
+            card['answer'] = (
+                f'{q.get("answer", "").lower()}. {q["options"].get(q.get("answer", ""), "")}'
+            )
+            cards[card_id] = card
+
+        elif qtype == 'cloze':
+            print(q['question'])
+            try:
+                ans = input('\nYour answer: ').strip()
+            except (EOFError, KeyboardInterrupt):
+                print()
+                return
+            is_correct = ans.lower() == q.get('answer', '').lower()
+            card_id = f'{topic}-cum-{qid}'
+            card = _find_card(cards, qid, topic, 'cumulative')
+            card['question'] = q['question']
+            card['answer'] = q.get('answer', '')
+            cards[card_id] = card
+
+        elif qtype == 'tf':
+            print(q['statement'])
+            while True:
+                try:
+                    ans = input('\nTrue or False: ').strip().lower()
+                except (EOFError, KeyboardInterrupt):
+                    print()
+                    return
+                if ans in ('t', 'true', 'f', 'false'):
+                    break
+                print('Invalid. Enter t/true or f/false.')
+            user_answer = ans in ('t', 'true')
+            is_correct = user_answer == q.get('answer', True)
+            card_id = f'{topic}-cum-{qid}'
+            card = _find_card(cards, qid, topic, 'cumulative')
+            card['question'] = q.get('statement', '')
+            card['answer'] = 'True' if q.get('answer', True) else 'False'
+            cards[card_id] = card
+        else:
+            print(f'{YELLOW}Unknown type: {qtype}{NC}')
+            continue
+
+        if is_correct:
+            print(f'{GREEN}✓ Correct!{NC}')
+            quality = 4
+            correct += 1
+        else:
+            print(f'{RED}✗ Wrong.{NC}')
+            quality = 1
+
+        explanation = q.get('explanation', '')
+        if explanation:
+            print(f'  {explanation}')
+
+        # Update SRS
+        if card_id in cards:
+            cards[card_id] = _sm2.sm2_update(cards[card_id], quality)
+
+        shown += 1
+        print()
+
+    deck['cards'] = cards
+    _save_deck(topic, deck)
+
+    pct = correct * 100 // shown if shown else 0
+    print(f'\nScore: {correct}/{shown} ({pct}%)')
+    _record_session(topic, 'cumulative-quiz', module='cumulative', score=correct, total=shown)
+
+
+def cmd_explain(topic: str, module: str):
     _check_topic(topic)
     _check_module(topic, module)
 
@@ -654,8 +1035,7 @@ def cmd_explain(args):
     print(f'Lesson: {lesson_path}')
 
 
-def cmd_review(args):
-    topic = args.topic
+def cmd_review(topic: str):
     _check_topic(topic)
 
     deck = _load_deck(topic)
@@ -703,7 +1083,7 @@ def cmd_review(args):
         if ans is None:
             # Showed answer — mark as review for re-attempt later
             quality = 2
-        elif ans == answer_key:
+        elif ans == answer_key.lower():
             print(f'{GREEN}✓ Correct!{NC}')
             quality = 4
             correct += 1
@@ -726,8 +1106,7 @@ def cmd_review(args):
         _record_session(topic, 'review', score=correct, total=total)
 
 
-def cmd_stats(args):
-    topic = args.topic
+def cmd_stats(topic: str):
     _check_topic(topic)
 
     deck = _load_deck(topic)
@@ -773,8 +1152,7 @@ def cmd_stats(args):
             print(f'  {" | ".join(parts)}')
 
 
-def cmd_export(args):
-    topic = args.topic
+def cmd_export(topic: str):
     _check_topic(topic)
 
     deck = _load_deck(topic)
@@ -801,11 +1179,8 @@ def cmd_export(args):
     print('Import into Anki via: File > Import')
 
 
-def cmd_rate(args):
-    topic = args.topic
-    module = args.module
-    score = args.score
-    comment = getattr(args, 'comment', '') or ''
+def cmd_rate(topic: str, module: str, score: int, comment: str = ''):
+    comment = comment or ''
     _check_topic(topic)
     _check_module(topic, module)
 
@@ -826,11 +1201,8 @@ def cmd_rate(args):
     print(f'{GREEN}Rated {module}: {score}/5{NC}')
 
 
-def cmd_flag(args):
-    topic = args.topic
-    module = args.module
-    flag_type = args.type
-    detail = getattr(args, 'detail', '') or ''
+def cmd_flag(topic: str, module: str, flag_type: str = 'wrong', detail: str = ''):
+    detail = detail or ''
     _check_topic(topic)
     _check_module(topic, module)
 
@@ -852,8 +1224,7 @@ def cmd_flag(args):
     print(f'{GREEN}Flagged {module}: {flag_type}{NC}')
 
 
-def cmd_feedback(args):
-    topic = args.topic
+def cmd_feedback(topic: str):
     _check_topic(topic)
 
     feedback = _load_feedback(topic)
@@ -903,8 +1274,7 @@ def cmd_feedback(args):
             print(f'  - {mod}')
 
 
-def cmd_analytics(args):
-    topic = args.topic
+def cmd_analytics(topic: str):
     _check_topic(topic)
 
     deck = _load_deck(topic)
@@ -977,8 +1347,7 @@ def cmd_analytics(args):
             print(f'  {mod}: {avg:.2f} {indicator}')
 
 
-def cmd_forecast(args):
-    topic = args.topic
+def cmd_forecast(topic: str):
     _check_topic(topic)
 
     deck = _load_deck(topic)
@@ -1032,8 +1401,7 @@ def cmd_forecast(args):
     print(f'  Later: {len(later)} cards')
 
 
-def cmd_study_plan(args):
-    topic = args.topic
+def cmd_study_plan(topic: str):
     _check_topic(topic)
 
     deck = _load_deck(topic)
@@ -1078,16 +1446,16 @@ def cmd_study_plan(args):
     if total_suggested > target:
         print('  (Focus on due + weak. Skip mastered.)')
     elif total_suggested == 0:
-        print('  All caught up! Next review based on SM-2 schedule.')
+        print('  All caught up! Next review based on FSRS-5 schedule.')
 
 
-def cmd_epub(args):
-    topic = args.topic
-    output = args.output
-    mermaid = args.mermaid
-    description = args.description
-    theme = args.theme
-
+def cmd_epub(
+    topic: str,
+    output: Optional[str] = None,
+    description: str = '',
+    theme: str = 'notebook',
+    mermaid: str = 'api',
+):
     _check_topic(topic)
     spath = _topic_path(topic)
 
@@ -1127,20 +1495,23 @@ def cmd_epub(args):
         sys.exit(1)
 
 
-def _pdf_extra_args(args):
+def _pdf_extra_args(title=None, author='Learn Something', engine='auto'):
     cmd = []
-    if args.title:
-        cmd.extend(['--title', args.title])
-    if args.author:
-        cmd.extend(['--author', args.author])
-    cmd.extend(['--engine', args.engine])
+    if title:
+        cmd.extend(['--title', title])
+    if author:
+        cmd.extend(['--author', author])
+    cmd.extend(['--engine', engine])
     return cmd
 
 
-def cmd_pdf(args):
-    topic = args.topic
-    output = args.output
-
+def cmd_pdf(
+    topic: str,
+    output: Optional[str] = None,
+    title: Optional[str] = None,
+    author: str = 'Learn Something',
+    engine: str = 'auto',
+):
     _check_topic(topic)
     spath = _topic_path(topic)
 
@@ -1153,7 +1524,9 @@ def cmd_pdf(args):
         sys.exit(1)
 
     print(f'{CYAN}Building PDF: {topic}{NC}')
-    cmd = [sys.executable, str(pdf_script), 'build', str(spath), output] + _pdf_extra_args(args)
+    cmd = [sys.executable, str(pdf_script), 'build', str(spath), output] + _pdf_extra_args(
+        title, author, engine
+    )
     result = subprocess.run(
         cmd,
         capture_output=True,
@@ -1171,10 +1544,13 @@ def cmd_pdf(args):
         sys.exit(1)
 
 
-def cmd_pdf_regen(args):
-    topic = args.topic
-    output = args.output
-
+def cmd_pdf_regen(
+    topic: str,
+    output: Optional[str] = None,
+    title: Optional[str] = None,
+    author: str = 'Learn Something',
+    engine: str = 'auto',
+):
     _check_topic(topic)
     spath = _topic_path(topic)
     book_md = spath / 'book.md'
@@ -1192,7 +1568,9 @@ def cmd_pdf_regen(args):
         sys.exit(1)
 
     print(f'{CYAN}Regenerating PDF from cached markdown: {topic}{NC}')
-    cmd = [sys.executable, str(pdf_script), 'from-md', str(book_md), output] + _pdf_extra_args(args)
+    cmd = [sys.executable, str(pdf_script), 'from-md', str(book_md), output] + _pdf_extra_args(
+        title, author, engine
+    )
     result = subprocess.run(
         cmd,
         capture_output=True,
@@ -1210,13 +1588,13 @@ def cmd_pdf_regen(args):
         sys.exit(1)
 
 
-def cmd_epub_regen(args):
-    topic = args.topic
-    output = args.output
-    mermaid = args.mermaid
-    description = args.description
-    theme = args.theme
-
+def cmd_epub_regen(
+    topic: str,
+    output: Optional[str] = None,
+    description: str = '',
+    theme: str = 'notebook',
+    mermaid: str = 'api',
+):
     _check_topic(topic)
     spath = _topic_path(topic)
     book_md = spath / 'book.md'
@@ -1261,7 +1639,7 @@ def cmd_epub_regen(args):
         sys.exit(1)
 
 
-def cmd_epub_list_themes(args):
+def cmd_epub_list_themes():
     epub_script = SKILL_DIR / 'scripts' / 'epub.py'
     if not epub_script.exists():
         print(f'{RED}epub.py not found at {epub_script}{NC}')
@@ -1276,10 +1654,7 @@ def cmd_epub_list_themes(args):
     sys.exit(result.returncode)
 
 
-def cmd_epub_verify(args):
-    topic = args.topic
-    output = args.output
-
+def cmd_epub_verify(topic: str, output: Optional[str] = None):
     _check_topic(topic)
     spath = _topic_path(topic)
 
@@ -1308,241 +1683,11 @@ def cmd_epub_verify(args):
         print(result.stderr, file=sys.stderr, end='')
 
 
-# ── CLI Parser ──────────────────────────────────────────────────
-
-
-def main():
-    parser = argparse.ArgumentParser(
-        description='Learn Anything — study with spaced repetition (SM-2)',
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Commands:
-  init <topic> [lang]           Create topic dir (optional, auto-created on first use)
-  start <topic>                 Show topic overview and modules
-  create-module <topic> <mod>   Create new module from template
-  quiz <topic> <mod>            Take MCQ quiz (--adaptive, --weak-only)
-  explain <topic> <mod>         Feynman Technique prompt
-  feynman <topic> <mod>         Alias for explain
-  review <topic>                Spaced repetition review
-  stats <topic>                 Study statistics
-  export <topic>                Export to Anki CSV
-  rate <topic> <mod> <1-5>      Rate module clarity
-  flag <topic> <mod> <type>     Report content error (wrong/outdated/confusing)
-  feedback <topic>              Show aggregated feedback and suggestions
-  analytics <topic>             Retention analytics and mastery breakdown
-  forecast <topic>              Forgetting forecast (what's due when)
-  study-plan <topic>            Optimal study session composition
-  epub <topic> [file]           Export course to EPUB book
-  epub-regen <topic> [file]     Regenerate EPUB from cached markdown
-  epub-verify <topic> [file]    Validate EPUB structure
-  pdf <topic> [file]            Export course to PDF
-  pdf-regen <topic> [file]      Regenerate PDF from cached book.md
-        """,
-    )
-    sub = parser.add_subparsers(dest='command')
-    sub.required = True
-
-    p = sub.add_parser('init', help='Create topic directory with syllabus template')
-    p.add_argument('topic')
-    p.add_argument('lang', nargs='?', default='en')
-    p.add_argument(
-        '--depth',
-        default='standard',
-        choices=['survey', 'standard', 'deep'],
-        help='Module depth: survey (~6), standard (~18), deep (~28)',
-    )
-    p.add_argument(
-        '--pretest', action='store_true', help='Take a quick pre-test to skip known content'
-    )
-
-    p = sub.add_parser('start', help='Show topic overview')
-    p.add_argument('topic')
-
-    p = sub.add_parser('create-module', help='Create new module from template')
-    p.add_argument('topic')
-    p.add_argument('module_id')
-    p.add_argument('--name', default=None, help='Human-readable module name')
-
-    p = sub.add_parser('quiz', help='Take MCQ quiz')
-    p.add_argument('topic')
-    p.add_argument('module')
-    p.add_argument('--adaptive', action='store_true', help='Adaptive difficulty mode')
-    p.add_argument('--weak-only', action='store_true', help='Only quiz on weak cards (ease < 2.0)')
-
-    p = sub.add_parser('explain', help='Feynman Technique prompt')
-    p.add_argument('topic')
-    p.add_argument('module')
-
-    p = sub.add_parser('feynman', help='Feynman Technique prompt (alias)')
-    p.add_argument('topic')
-    p.add_argument('module')
-
-    p = sub.add_parser('review', help='Spaced repetition review')
-    p.add_argument('topic')
-
-    p = sub.add_parser('stats', help='Study statistics')
-    p.add_argument('topic')
-
-    p = sub.add_parser('export', help='Export to Anki CSV')
-    p.add_argument('topic')
-
-    p = sub.add_parser('rate', help='Rate a module (1-5 stars)')
-    p.add_argument('topic')
-    p.add_argument('module')
-    p.add_argument('score', type=int)
-    p.add_argument('--comment', default='', help='Optional comment')
-
-    p = sub.add_parser('flag', help='Report content error')
-    p.add_argument('topic')
-    p.add_argument('module')
-    p.add_argument('type', choices=['wrong', 'outdated', 'confusing'])
-    p.add_argument('--detail', default='', help='Details about the issue')
-
-    p = sub.add_parser('feedback', help='Show aggregated feedback')
-    p.add_argument('topic')
-
-    p = sub.add_parser('analytics', help='Retention analytics')
-    p.add_argument('topic')
-
-    p = sub.add_parser('forecast', help='Forgetting forecast')
-    p.add_argument('topic')
-
-    p = sub.add_parser('study-plan', help='Optimal study plan')
-    p.add_argument('topic')
-
-    p = sub.add_parser('epub-list-themes', help='List available EPUB themes')
-
-    p = sub.add_parser('epub', help='Export course to EPUB')
-    p.add_argument('topic')
-    p.add_argument('output', nargs='?', default=None)
-    p.add_argument('--description', default='', help='Cover page description')
-    p.add_argument(
-        '--theme',
-        default='notebook',
-        help='Theme name (default: notebook). Use epub-list-themes to see all themes.',
-    )
-    p.add_argument(
-        '--mermaid',
-        default='api',
-        choices=['api', 'local', 'off'],
-        help='Mermaid rendering mode: api (default), local (mmdc CLI), off (skip)',
-    )
-
-    p = sub.add_parser('epub-regen', help='Regenerate EPUB from cached book.md')
-    p.add_argument('topic')
-    p.add_argument('output', nargs='?', default=None)
-    p.add_argument('--description', default='', help='Cover page description')
-    p.add_argument(
-        '--theme',
-        default='notebook',
-        help='Theme name (default: notebook). Use epub-list-themes to see all themes.',
-    )
-    p.add_argument(
-        '--mermaid',
-        default='api',
-        choices=['api', 'local', 'off'],
-        help='Mermaid rendering mode: api (default), local (mmdc CLI), off (skip)',
-    )
-
-    p = sub.add_parser('epub-verify', help='Validate EPUB structure')
-    p.add_argument('topic')
-    p.add_argument('output', nargs='?', default=None)
-
-    p = sub.add_parser('pdf', help='Export course to PDF')
-    p.add_argument('topic')
-    p.add_argument('output', nargs='?', default=None)
-    p.add_argument('--title', default=None, help='PDF title (default: topic dir name)')
-    p.add_argument('--author', default='Learn Anything', help='PDF author')
-    p.add_argument(
-        '--engine',
-        default='auto',
-        choices=['auto', 'weasyprint', 'pandoc', 'raw'],
-        help='PDF engine: auto (default), weasyprint, pandoc, raw (stdlib)',
-    )
-
-    p = sub.add_parser('pdf-regen', help='Regenerate PDF from cached book.md')
-    p.add_argument('topic')
-    p.add_argument('output', nargs='?', default=None)
-    p.add_argument('--title', default=None, help='PDF title (default: topic dir name)')
-    p.add_argument('--author', default='Learn Anything', help='PDF author')
-    p.add_argument(
-        '--engine',
-        default='auto',
-        choices=['auto', 'weasyprint', 'pandoc', 'raw'],
-        help='PDF engine: auto (default), weasyprint, pandoc, raw (stdlib)',
-    )
-
-    p = sub.add_parser('sync', help='Export deck to Reader directory')
-    p.add_argument('topic')
-    p.add_argument(
-        '--reader-path',
-        default=None,
-        help='Reader subjects dir (default: ~/.coursereader/subjects)',
-    )
-
-    p = sub.add_parser('sync-pull', help='Import deck from Reader directory')
-    p.add_argument('topic')
-    p.add_argument(
-        '--reader-path',
-        default=None,
-        help='Reader subjects dir (default: ~/.coursereader/subjects)',
-    )
-
-    sub.add_parser('help', help='Show this help message')
-
-    args = parser.parse_args()
-
-    if args.command == 'help':
-        parser.print_help()
-        return
-
-    dispatch = {
-        'init': cmd_init,
-        'start': cmd_start,
-        'create-module': cmd_create_module,
-        'quiz': cmd_quiz,
-        'explain': cmd_explain,
-        'feynman': cmd_explain,
-        'review': cmd_review,
-        'stats': cmd_stats,
-        'export': cmd_export,
-        'rate': cmd_rate,
-        'flag': cmd_flag,
-        'feedback': cmd_feedback,
-        'analytics': cmd_analytics,
-        'forecast': cmd_forecast,
-        'study-plan': cmd_study_plan,
-        'epub': cmd_epub,
-        'epub-regen': cmd_epub_regen,
-        'epub-verify': cmd_epub_verify,
-        'epub-list-themes': cmd_epub_list_themes,
-        'pdf': cmd_pdf,
-        'pdf-regen': cmd_pdf_regen,
-        'sync': cmd_sync,
-        'sync-pull': cmd_sync_pull,
-    }
-
-    fn = dispatch.get(args.command)
-    if fn:
-        fn(args)
-    else:
-        parser.print_help()
-        sys.exit(1)
-
-
-def _reader_subjects_path(reader_path=None):
-    """Return the Reader's subjects directory."""
-    if reader_path:
-        return Path(reader_path)
-    return Path.home() / '.coursereader' / 'subjects'
-
-
-def cmd_sync(args):
+def cmd_sync(topic: str, reader_path: Optional[str] = None):
     """Export CLI deck to Reader-compatible directory."""
-    topic = args.topic
     _check_topic(topic)
 
-    reader_subjects = _reader_subjects_path(getattr(args, 'reader_path', None))
+    reader_subjects = _reader_subjects_path(reader_path)
     reader_topic = reader_subjects / topic
 
     # Create Reader directory structure
@@ -1571,30 +1716,29 @@ def cmd_sync(args):
             continue
         reader_mod = reader_modules / mod_dir.name
         reader_mod.mkdir(exist_ok=True)
-        for fname in ['lesson.md', 'quiz.yaml']:
+        for fname in ['lesson.md', 'quiz.yaml', 'cloze.yaml']:
             src = mod_dir / fname
             if src.exists():
-                import shutil
-
                 shutil.copy2(src, reader_mod / fname)
                 copied += 1
 
     # Copy syllabus
     syllabus_src = _topic_path(topic) / 'syllabus.yaml'
     if syllabus_src.exists():
-        import shutil
-
         shutil.copy2(syllabus_src, reader_topic / 'syllabus.yaml')
+
+    # Copy cumulative quizzes
+    for cum_src in sorted(_topic_path(topic).glob('cumulative_quiz*.yaml')):
+        shutil.copy2(cum_src, reader_topic / cum_src.name)
 
     print(f'{GREEN}Synced to Reader: {reader_topic}{NC}')
     print(f'  Deck: {len(cards)} cards')
     print(f'  Modules: {copied} files copied')
 
 
-def cmd_sync_pull(args):
+def cmd_sync_pull(topic: str, reader_path: Optional[str] = None):
     """Import deck from Reader directory to CLI."""
-    topic = args.topic
-    reader_subjects = _reader_subjects_path(getattr(args, 'reader_path', None))
+    reader_subjects = _reader_subjects_path(reader_path)
     reader_topic = reader_subjects / topic
 
     if not reader_topic.exists():
@@ -1628,5 +1772,974 @@ def cmd_sync_pull(args):
     print(f'  Deck: {len(cards)} cards')
 
 
+def cmd_validate(topic: str, module: Optional[str] = None):
+    """Full quality gate: schema + content syntax + quality checks. All checks ERR."""
+    t = _topic_path(topic)
+    if not t.exists():
+        print(f'{RED}Subject not found: {topic}{NC}')
+        sys.exit(1)
+
+    results = []
+    results += _schema_errors(t, yaml_available())
+    results += _content_syntax_errors(t, module)
+    results += _quality_checks(t, module)
+
+    # Report
+    any_errors = False
+    for name, errors in results:
+        if errors:
+            any_errors = True
+            print(f'{RED}{name}: {len(errors)} error(s){NC}')
+            for err in errors:
+                print(f'  - {err}')
+        else:
+            print(f'{GREEN}{name}: OK{NC}')
+
+    if not any_errors:
+        print(f'\n{GREEN}All checks passed.{NC}')
+    sys.exit(1 if any_errors else 0)
+
+
+def yaml_available():
+    return yaml is not None
+
+
+def _schema_errors(t, has_yaml):
+    """Pass 1: validate all files against JSON schemas + module dir naming."""
+    results = []
+
+    # Validate deck
+    deck_path = t / 'srs' / 'deck.json'
+    if deck_path.exists():
+        try:
+            with open(deck_path) as f:
+                deck_data = json.load(f)
+            errors = _try_validate(deck_data, 'deck')
+            results.append(('deck.json', errors))
+        except Exception as e:
+            results.append(('deck.json', [str(e)]))
+    else:
+        print(
+            f'{YELLOW}deck.json: not found — no SRS cards yet (OK for new/unstudied subjects){NC}'
+        )
+        results.append(('deck.json', []))
+
+    # Validate quiz files
+    for mf in sorted(t.glob('modules/*/quiz.yaml')):
+        try:
+            if not has_yaml:
+                results.append((str(mf.relative_to(t)), ['PyYAML not installed']))
+                continue
+            with open(mf) as f:
+                quiz_data = yaml.safe_load(f)
+            errors = _try_validate(quiz_data, 'quiz')
+            results.append((str(mf.relative_to(t)), errors))
+        except Exception as e:
+            results.append((str(mf.relative_to(t)), [str(e)]))
+
+    # Validate cloze files
+    for cf in sorted(t.glob('modules/*/cloze.yaml')):
+        try:
+            if not has_yaml:
+                results.append((str(cf.relative_to(t)), ['PyYAML not installed']))
+                continue
+            with open(cf) as f:
+                cloze_data = yaml.safe_load(f)
+            errors = _try_validate(cloze_data, 'cloze_quiz')
+            results.append((str(cf.relative_to(t)), errors))
+        except Exception as e:
+            results.append((str(cf.relative_to(t)), [str(e)]))
+
+    # Validate cumulative quizzes
+    for cuf in sorted(t.glob('cumulative_quiz*.yaml')):
+        try:
+            if not has_yaml:
+                results.append((str(cuf.relative_to(t)), ['PyYAML not installed']))
+                continue
+            with open(cuf) as f:
+                cum_data = yaml.safe_load(f)
+            errors = _try_validate(cum_data, 'cumulative_quiz')
+            results.append((str(cuf.relative_to(t)), errors))
+        except Exception as e:
+            results.append((str(cuf.relative_to(t)), [str(e)]))
+
+    # Validate module dir naming (NN-kebab-case)
+    for md in sorted(t.glob('modules/*')):
+        if not md.is_dir():
+            results.append((f'modules/{md.name}', ['not a directory; remove junk files']))
+            continue
+        if not MODULE_ID_RE.match(md.name):
+            results.append((f'modules/{md.name}', ['invalid name; expected NN-kebab-case']))
+
+    # Validate syllabus
+    syll_path = t / 'syllabus.yaml'
+    if syll_path.exists():
+        try:
+            if not has_yaml:
+                results.append(('syllabus.yaml', ['PyYAML not installed']))
+            else:
+                with open(syll_path) as f:
+                    syll_data = yaml.safe_load(f)
+                errors = _try_validate(syll_data, 'syllabus')
+                results.append(('syllabus.yaml', errors))
+        except Exception as e:
+            results.append(('syllabus.yaml', [str(e)]))
+
+    # Validate feedback
+    fb_path = t / 'srs' / 'feedback.json'
+    if fb_path.exists():
+        try:
+            with open(fb_path) as f:
+                fb_data = json.load(f)
+            errors = _try_validate(fb_data, 'feedback')
+            results.append(('srs/feedback.json', errors))
+        except Exception as e:
+            results.append(('srs/feedback.json', [str(e)]))
+
+    return results
+
+
+# ── Content syntax validation ──────────────────────────────────
+
+
+def _check_pymarkdownlnt():
+    """Check if pymarkdownlnt is available."""
+    try:
+        result = subprocess.run(
+            ['pymarkdown', 'version'],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        return result.returncode == 0
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+
+
+def _check_mmdc():
+    """Check if mermaid CLI (mmdc) is available."""
+    try:
+        result = subprocess.run(
+            ['mmdc', '--version'],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        return result.returncode == 0
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+
+
+def _validate_markdown_basic(filepath):
+    """Basic markdown validation without external tools.
+    Returns list of (line, message) tuples."""
+    errors = []
+    content = filepath.read_text()
+    lines = content.split('\n')
+
+    # Check code block closure
+    in_code_block = False
+    code_block_start = 0
+    for i, line in enumerate(lines, 1):
+        stripped = line.strip()
+        if stripped.startswith('```'):
+            if in_code_block:
+                in_code_block = False
+            else:
+                in_code_block = True
+                code_block_start = i
+    if in_code_block:
+        errors.append((code_block_start, 'Code block not closed (opened here)'))
+
+    # Check heading hierarchy
+    prev_level = 0
+    in_code_block = False
+    for i, line in enumerate(lines, 1):
+        stripped = line.strip()
+        if stripped.startswith('```'):
+            in_code_block = not in_code_block
+            continue
+        if in_code_block:
+            continue
+        m = re.match(r'^(#{1,6})\s', line)
+        if m:
+            level = len(m.group(1))
+            if prev_level > 0 and level > prev_level + 1:
+                errors.append((i, f'Heading level skipped (h{prev_level} → h{level})'))
+            prev_level = level
+
+    # Check link syntax
+    for i, line in enumerate(lines, 1):
+        # Find [text](url) patterns - basic check
+        for m in re.finditer(r'\[([^\]]*)\]\(([^)]*)\)', line):
+            pass  # Valid link syntax
+        # Find broken links: [text] without (url)
+        for m in re.finditer(r'\[([^\]]+)\](?!\()', line):
+            text = m.group(1)
+            # Skip if it's inside a code block or is an image
+            if text and not text.startswith('!'):
+                # Could be a reference link, but flag if it looks like a broken inline link
+                pass  # Reference links are valid, skip
+
+    # Check bold/italic closure
+    in_code_block = False
+    for i, line in enumerate(lines, 1):
+        stripped = line.strip()
+        if stripped.startswith('```'):
+            in_code_block = not in_code_block
+            continue
+        if in_code_block:
+            continue
+        # Count unescaped ** pairs
+        double_stars = len(re.findall(r'(?<!\*)\*\*(?!\*)', line))
+        if double_stars % 2 != 0:
+            errors.append((i, 'Unclosed ** (bold) marker'))
+        # Count unescaped * (not **, not ***)
+        single_stars = len(re.findall(r'(?<!\*)\*(?!\*)', line)) - double_stars * 2
+        if single_stars % 2 != 0:
+            # Could be valid if it's a list item marker, check context
+            stripped = line.strip()
+            if not stripped.startswith('* ') and not stripped.startswith('- '):
+                errors.append((i, 'Unclosed * (italic) marker'))
+
+    # Check table structure
+    in_table = False
+    header_cols = 0
+    for i, line in enumerate(lines, 1):
+        stripped = line.strip()
+        if stripped.startswith('|') and stripped.endswith('|'):
+            if not in_table:
+                in_table = True
+                header_cols = stripped.count('|') - 1
+            else:
+                # Check separator row
+                if re.match(r'^\|[\s\-:|]+\|$', stripped):
+                    sep_cols = stripped.count('|') - 1
+                    if sep_cols != header_cols:
+                        errors.append(
+                            (i, f'Table separator has {sep_cols} columns, header has {header_cols}')
+                        )
+        else:
+            in_table = False
+
+    return errors
+
+
+def _validate_mermaid_basic(content):
+    """Basic mermaid syntax validation without external tools.
+    Returns list of (block_num, message) tuples."""
+    errors = []
+    blocks = re.findall(
+        r'```mermaid\s*\n(.*?)```',
+        content,
+        re.DOTALL,
+    )
+
+    for idx, block in enumerate(blocks, 1):
+        block_stripped = block.strip()
+        if not block_stripped:
+            errors.append((idx, 'Empty mermaid block'))
+            continue
+
+        # Check diagram type declared
+        first_line = block_stripped.split('\n')[0].strip().lower()
+        diagram_types = [
+            'graph',
+            'flowchart',
+            'sequence',
+            'state',
+            'class',
+            'er',
+            'gantt',
+            'pie',
+            'git',
+            'mindmap',
+            'timeline',
+            'requirement',
+            'block',
+            'journey',
+            'sankey',
+            'xychart',
+            'quadrant',
+            'block-beta',
+        ]
+        has_type = any(first_line.startswith(dt) for dt in diagram_types)
+        if not has_type:
+            errors.append(
+                (idx, f'Missing diagram type keyword (first line: "{first_line[:40]}...")')
+            )
+
+        # Check arrow syntax (basic)
+        for line_num, line in enumerate(block_stripped.split('\n'), 1):
+            line_stripped = line.strip()
+            if not line_stripped or line_stripped.startswith('%%'):
+                continue
+            # Look for common arrow patterns
+            if '-->' in line_stripped or '---' in line_stripped or '->>' in line_stripped:
+                pass  # Valid arrow
+            # Check for style statements
+            if line_stripped.lower().startswith('style ') or line_stripped.lower().startswith(
+                'class '
+            ):
+                # Find ALL color-like patterns (anything starting with #)
+                all_colors = re.findall(r'#[0-9a-zA-Z]{2,8}', line_stripped)
+                for color in all_colors:
+                    # Check if it's valid hex: must be #RGB, #RGBA, #RRGGBB, or #RRGGBBAA
+                    hex_part = color[1:]
+                    if len(hex_part) not in (3, 4, 6, 8):
+                        errors.append((idx, f'Invalid hex color length: {color}'))
+                    elif not all(c in '0123456789abcdefABCDEF' for c in hex_part):
+                        errors.append((idx, f'Invalid hex color: {color} (non-hex characters)'))
+
+        # Check subgraph/end pairing
+        subgraph_count = len(re.findall(r'^\s*subgraph\b', block_stripped, re.MULTILINE))
+        end_count = len(re.findall(r'^\s*end\b', block_stripped, re.MULTILINE))
+        if subgraph_count != end_count:
+            errors.append(
+                (idx, f'subgraph/end mismatch: {subgraph_count} subgraph(s), {end_count} end(s)')
+            )
+
+    return errors
+
+
+def _content_syntax_errors(t, module=None):
+    """Pass 2: markdown + mermaid syntax validation of lesson.md files."""
+    results = []
+
+    has_pymarkdown = _check_pymarkdownlnt()
+    has_mmdc = _check_mmdc()
+
+    if not has_pymarkdown:
+        print(f'{YELLOW}pymarkdownlnt not installed — using basic markdown checks{NC}')
+        print(f'{YELLOW}Install: pip install pymarkdownlnt{NC}')
+    if not has_mmdc:
+        print(f'{YELLOW}mmdc not installed — using basic mermaid checks{NC}')
+        print(f'{YELLOW}Install: npm install -g @mermaid-js/mermaid-cli{NC}')
+
+    if module:
+        mods = [module]
+    else:
+        mods = sorted(d.name for d in t.glob('modules/*') if d.is_dir())
+
+    for m in mods:
+        mod_path = t / 'modules' / m
+        lesson_path = mod_path / 'lesson.md'
+        if not lesson_path.exists():
+            continue
+
+        md_errors = []
+        mermaid_errors = []
+
+        # Markdown validation
+        if has_pymarkdown:
+            try:
+                result = subprocess.run(
+                    ['pymarkdown', 'scan', str(lesson_path)],
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+                for line in result.stdout.splitlines():
+                    if line.startswith('MD'):
+                        m2 = re.match(r'(?:Line (\d+), Column \d+: )?(MD\d+)', line)
+                        if m2:
+                            lineno = int(m2.group(1)) if m2.group(1) else 0
+                            code = m2.group(2)
+                            md_errors.append((lineno, code))
+            except subprocess.TimeoutExpired:
+                md_errors.append((0, 'pymarkdown timed out'))
+        else:
+            md_errors = _validate_markdown_basic(lesson_path)
+
+        # Mermaid validation
+        content = lesson_path.read_text()
+        if has_mmdc:
+            blocks = re.findall(r'```mermaid\s*\n(.*?)```', content, re.DOTALL)
+            for idx, block in enumerate(blocks, 1):
+                if not block.strip():
+                    mermaid_errors.append((idx, 'Empty mermaid block'))
+                    continue
+                import tempfile
+
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.mmd', delete=False) as f:
+                    f.write(block)
+                    tmp_path = f.name
+                try:
+                    result = subprocess.run(
+                        ['mmdc', '-i', tmp_path, '-t', 'neutral', '--quiet'],
+                        capture_output=True,
+                        text=True,
+                        timeout=30,
+                    )
+                    if result.returncode != 0:
+                        err_msg = (
+                            result.stderr.strip().split('\n')[0]
+                            if result.stderr
+                            else 'invalid syntax'
+                        )
+                        mermaid_errors.append((idx, err_msg))
+                except subprocess.TimeoutExpired:
+                    mermaid_errors.append((idx, 'mmdc timed out'))
+                finally:
+                    os.unlink(tmp_path)
+        else:
+            mermaid_errors = _validate_mermaid_basic(content)
+
+        errors = [
+            f'[markdown] line {ln}: {msg}' if ln else f'[markdown] {msg}' for ln, msg in md_errors
+        ]
+        errors += [f'[mermaid] block {b}: {msg}' for b, msg in mermaid_errors]
+        results.append((f'{m}/lesson.md', errors))
+
+    return results
+
+
+def _quality_checks(t, module=None):
+    """Pass 3+4: quality gate. All checks are ERR."""
+    import yaml as _yaml
+
+    results = []
+
+    if module:
+        mods = [module]
+    else:
+        mods = sorted(d.name for d in t.glob('modules/*') if d.is_dir())
+
+    # Load syllabus learning objectives for Q-per-LO check
+    n_objectives = 0
+    syll_path = t / 'syllabus.yaml'
+    if syll_path.exists():
+        try:
+            syll = _yaml.safe_load(syll_path.read_text())
+            n_objectives = len(syll.get('learning_objectives', [])) if isinstance(syll, dict) else 0
+        except Exception:
+            pass
+
+    for m in mods:
+        mod_path = t / 'modules' / m
+
+        # ── lesson.md structural checks ──
+        lesson_path = mod_path / 'lesson.md'
+        if lesson_path.exists():
+            content = lesson_path.read_text(encoding='utf-8', errors='replace')
+            errs = []
+
+            # Rule 15: mindmap compulsory
+            if not re.search(r'```mermaid\s*\n\s*mindmap', content) and not re.search(
+                r'```\s*mindmap', content
+            ):
+                errs.append(
+                    'quality: missing module mindmap (```mermaid\\nmindmap ...) — rule 15, compulsory'
+                )
+            # Rule 16: module size — >13,000 chars ERR, >12,000 chars WARN
+            if len(content) > 13000:
+                errs.append(f'quality: lesson.md {len(content)} chars > 13,000 — rule 16 (hard error)')
+            elif len(content) > 12000:
+                print(f'{YELLOW}  WARN: lesson.md {len(content)} chars > 12,000 — rule 16 (target)', file=sys.stderr)
+            # Fence-aware view: strip ``` code/mermaid blocks so content-block rules
+            # only see prose/blockquotes (kills Mermaid node-brace false positives too)
+            non_fence = re.sub(r'```[^\n]*\n.*?```', '', content, flags=re.DOTALL)
+            # Rule 8: Socratic Think blocks — > **Think** blockquote form
+            if not re.search(r'(?m)^>\s*\*\*Think\*\*', non_fence):
+                errs.append('quality: no > **Think** blockquote — rule 8')
+            # Rule 11: cloze deletions (non-fence content only)
+            if not re.search(r'\*\*Cloze\*\*|\{[^}]{1,60}\}', non_fence):
+                errs.append('quality: no cloze {blank} in lesson — rule 11')
+            # Rule 12: predict-next — > **Predict** blockquote form
+            if not re.search(r'(?m)^>\s*\*\*Predict\*\*', non_fence):
+                errs.append('quality: no > **Predict** blockquote — rule 12')
+            # Rule 13: error-spotting — > **Spot the Mistake** blockquote OR
+            # ## Spot the Mistake heading whose section has non-fence body
+            ok13 = bool(re.search(r'(?m)^>\s*\*\*Spot the Mistake\*\*', non_fence))
+            if not ok13:
+                heading = re.search(r'(?m)^##\s+Spot the Mistake\b', content)
+                if heading:
+                    sect = content[heading.end():]
+                    nxt = re.search(r'^##\s+', sect, re.MULTILINE)
+                    if nxt:
+                        sect = sect[:nxt.start()]
+                    sect_non_fence = re.sub(r'```[^\n]*\n.*?```', '', sect, flags=re.DOTALL)
+                    ok13 = any(ln.strip() for ln in sect_non_fence.split('\n'))
+            if not ok13:
+                errs.append('quality: no Spot the Mistake exercise — rule 13')
+            # Rule 9: dual coding — mermaid diagram present (WARN, not ERR)
+            if not re.search(r'```mermaid', content):
+                print(f'{YELLOW}  WARN: no mermaid diagram — rule 9 (dual coding){NC}')
+            if errs:
+                results.append((f'{m}/lesson.md', errs))
+
+        # ── quiz.yaml checks ──
+        quiz_path = mod_path / 'quiz.yaml'
+        if quiz_path.exists():
+            try:
+                qs = _yaml.safe_load(quiz_path.read_text())
+                errs = []
+                if not isinstance(qs, list):
+                    errs.append('quality: quiz.yaml not a top-level list')
+                else:
+                    # item count 8-10 (schema floor 5; quality target 8-10)
+                    if len(qs) < 8:
+                        errs.append(f'quality: {len(qs)} questions < 8 minimum — target 8-10')
+                    # ≥1 Q per learning objective
+                    if n_objectives and len(qs) < n_objectives:
+                        errs.append(
+                            f'quality: {len(qs)} questions < {n_objectives} learning objectives'
+                        )
+                    # answer rotation: no 3 consecutive same letter
+                    ans = [str(q.get('answer', '')).lower() for q in qs]
+                    for i in range(2, len(ans)):
+                        if ans[i] == ans[i - 1] == ans[i - 2] and ans[i] in 'abcd':
+                            errs.append(
+                                f'quality: 3+ consecutive same answer letter (q{i + 1}) — answer rotation'
+                            )
+                            break
+                    # answer spread: no letter > 50%
+                    if ans:
+                        counts = Counter(a for a in ans if a in 'abcd')
+                        if counts:
+                            top = max(counts.values()) / len(ans)
+                            if top > 0.5:
+                                errs.append(
+                                    f'quality: answer spread skewed ({max(counts, key=counts.get)} = {top:.0%})'
+                                )
+                    # difficulty mix ~40/40/20
+                    ds = [q.get('difficulty') for q in qs if isinstance(q, dict)]
+                    if ds:
+                        c = Counter(ds)
+                        p3 = c.get(3, 0) / len(ds)
+                        if p3 > 0.4:
+                            errs.append(
+                                f'quality: difficulty 3 dominates ({p3:.0%}) — target ~40/40/20'
+                            )
+                if errs:
+                    results.append((f'{m}/quiz.yaml', errs))
+            except Exception as e:
+                results.append((f'{m}/quiz.yaml', [f'quality: parse error {e}']))
+
+        # ── cloze.yaml checks ──
+        cloze_path = mod_path / 'cloze.yaml'
+        if cloze_path.exists():
+            try:
+                cs = _yaml.safe_load(cloze_path.read_text())
+                errs = []
+                if not isinstance(cs, list):
+                    errs.append('quality: cloze.yaml not a top-level list')
+                elif len(cs) < 8:
+                    errs.append(f'quality: {len(cs)} cloze questions < 8 minimum — target 8-10')
+                if errs:
+                    results.append((f'{m}/cloze.yaml', errs))
+            except Exception as e:
+                results.append((f'{m}/cloze.yaml', [f'quality: parse error {e}']))
+
+    # ── cumulative quiz coverage ──
+    cum_files = sorted(t.glob('cumulative_quiz*.yaml'))
+    if len(mods) >= 3 and not cum_files:
+        results.append(
+            (
+                'cumulative_quiz_XX-YY.yaml',
+                ['quality: no cumulative quiz — needed after 3+ modules'],
+            )
+        )
+
+    for cuf in cum_files:
+        try:
+            cq = _yaml.safe_load(cuf.read_text())
+            if not isinstance(cq, list):
+                results.append((cuf.name, ['quality: not a top-level list']))
+                continue
+            types = [q.get('type', 'mcq') for q in cq]
+            c = Counter(types)
+            mcq, cloze, tf = c.get('mcq', 0), c.get('cloze', 0), c.get('tf', 0)
+            errs = []
+            if mcq < 1 or cloze < 1 or tf < 1:
+                errs.append(
+                    f'quality: cumulative type mix {dict(c)} — need ≥1 each of mcq/cloze/tf'
+                )
+            if len(cq) < 8:
+                errs.append(f'quality: {len(cq)} questions < 8 minimum')
+            ans = [str(q.get('answer', '')).lower() for q in cq if q.get('type') == 'mcq']
+            for i in range(2, len(ans)):
+                if ans[i] == ans[i - 1] == ans[i - 2] and ans[i] in 'abcd':
+                    errs.append(f'quality: 3+ consecutive same answer letter (q{i + 1})')
+                    break
+            if errs:
+                results.append((cuf.name, errs))
+        except Exception as e:
+            results.append((cuf.name, [f'quality: parse error {e}']))
+
+    return results
+
+
+def cmd_validate_content(topic: str, module: Optional[str] = None):
+    """Deprecated alias → validate (full quality gate)."""
+    print(
+        f'{YELLOW}validate-content is deprecated — use validate (now includes content syntax){NC}'
+    )
+    cmd_validate(topic, module)
+
+
+def cmd_enrich(
+    topic: str,
+    module: Optional[str] = None,
+    types: str = 'cloze,predict,error,diagram',
+    dry_run: bool = False,
+    render_mode: str = 'api',
+):
+    """Add cloze/predict/error/diagram enrichments to lesson(s).
+
+    Args:
+        render_mode: Diagram render mode ('api', 'local', or 'off')
+    """
+    _check_topic(topic)
+
+    from enrich import enrich_lesson
+
+    type_list = [t.strip() for t in types.split(',')]
+
+    if module:
+        mods = [module]
+    else:
+        mods = _list_modules(topic)
+
+    if not mods:
+        print(f'{YELLOW}No modules found.{NC}')
+        return
+
+    for m in mods:
+        lesson_path = _module_path(topic, m) / 'lesson.md'
+        if not lesson_path.exists():
+            print(f'{YELLOW}No lesson.md in module {m}, skipping{NC}')
+            continue
+        print(f'{CYAN}Enriching: {topic}/{m}{NC}')
+        enrich_lesson(str(lesson_path), types=type_list, dry_run=dry_run, render_mode=render_mode)
+
+
+def cmd_blurting(topic: str, module: str):
+    """Brain-dump before review. Type everything you remember. AI compares to lesson."""
+    _check_topic(topic)
+    path = _check_module(topic, module)
+    lesson = path / 'lesson.md'
+    if not lesson.exists():
+        print(f'{RED}No lesson.md at {lesson}{NC}')
+        sys.exit(1)
+
+    content = lesson.read_text()
+
+    # Extract key terms: headings, **bold** text, Think answers, Mermaid captions
+    key_terms = set()
+    for m in re.finditer(r'\*\*(.+?)\*\*', content):
+        t = m.group(1).strip()
+        if t and t not in ('Think', 'Predict', 'Cloze', 'Spot the Mistake', 'Answer'):
+            key_terms.add(t)
+    for m in re.finditer(r'^## (.+)$', content, re.MULTILINE):
+        key_terms.add(m.group(1).strip())
+    for m in re.finditer(r'> \*\*Answer\*\*: (.+)', content):
+        for word in re.findall(r'[A-Za-z][A-Za-z-]+', m.group(1)):
+            if len(word) > 3:
+                key_terms.add(word)
+
+    key_terms = sorted(key_terms)
+    print(f'{CYAN}=== Blurting: {topic}/{module} ==={NC}')
+    print(f'{YELLOW}Type everything you remember about this module.{NC}')
+    print(f'{YELLOW}Type "DONE" on its own line when finished.{NC}\n')
+
+    lines = []
+    while True:
+        try:
+            line = input()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            break
+        if line.strip().upper() == 'DONE':
+            break
+        lines.append(line)
+
+    user_text = ' '.join(lines).lower()
+
+    # Compare
+    covered = []
+    missing = []
+    fuzzy = []
+    for term in key_terms:
+        tl = term.lower()
+        if tl in user_text:
+            covered.append(term)
+        else:
+            # Check if any word from term appears
+            term_words = set(tl.split())
+            user_words = set(user_text.split())
+            overlap = term_words & user_words
+            if overlap and len(overlap) >= len(term_words) * 0.5:
+                fuzzy.append(term)
+            else:
+                missing.append(term)
+
+    print(f'\n{GREEN}✓ Covered: {len(covered)}{NC}')
+    if covered:
+        for c in covered[:10]:
+            print(f'  ✓ {c}')
+        if len(covered) > 10:
+            print(f'  ... and {len(covered) - 10} more')
+
+    print(f'\n{YELLOW}? Fuzzy: {len(fuzzy)}{NC}')
+    if fuzzy:
+        for f in fuzzy[:5]:
+            print(f'  ? {f}')
+
+    print(f'\n{RED}✗ Missing: {len(missing)}{NC}')
+    if missing:
+        for m in missing[:10]:
+            print(f'  ✗ {m}')
+        if len(missing) > 10:
+            print(f'  ... and {len(missing) - 10} more')
+
+    pct = len(covered) * 100 // len(key_terms) if key_terms else 100
+    print(f'\n{CYAN}Recall: {pct}% ({len(covered)}/{len(key_terms)} terms){NC}')
+    if pct < 50:
+        print(f'{YELLOW}Review before quiz. Key gaps above.{NC}')
+    elif pct < 80:
+        print(f'{GREEN}Good recall. Review fuzzy terms then quiz.{NC}')
+    else:
+        print(f'{GREEN}Strong recall. Ready for quiz.{NC}')
+
+    # Save blurt session
+    blurt_dir = _topic_path(topic) / 'srs' / 'blurting'
+    blurt_dir.mkdir(parents=True, exist_ok=True)
+    record = {
+        'module': module,
+        'date': datetime.now().isoformat(),
+        'covered': len(covered),
+        'total': len(key_terms),
+        'pct': pct,
+        'missing': missing,
+    }
+    with open(blurt_dir / f'{module}-{datetime.now().strftime("%Y%m%d-%H%M%S")}.json', 'w') as f:
+        json.dump(record, f, indent=2)
+    _record_session(topic, 'blurting', module=module, score=len(covered), total=len(key_terms))
+
+
+def cmd_fsrs_predict(topic: str):
+    """Show FSRS memory model predictions for all cards."""
+    _check_topic(topic)
+    deck = _load_deck(topic)
+    cards = deck.get('cards', {})
+    if not cards:
+        print(f'{YELLOW}No deck yet. Take a quiz first.{NC}')
+        return
+
+    from sm2 import predict_retention
+
+    today = datetime.now()
+    total = len(cards)
+    avg_stability = 0
+    avg_difficulty = 0
+    now_retained = 0
+    due_retained = 0
+    due_count = 0
+    card_estimates = []
+
+    for c in cards.values():
+        s = c.get('stability', c.get('interval', 1))
+        d = c.get('difficulty', 5.0)
+        nr = c.get('nextReviewDate', today.strftime('%Y-%m-%d'))
+
+        avg_stability += s
+        avg_difficulty += d
+
+        # Current retention
+        lr = c.get('lastReviewed')
+        if lr:
+            try:
+                lrd = datetime.strptime(lr, '%Y-%m-%d')
+                elapsed = max(0, (today - lrd).days)
+                r_now = predict_retention(s, elapsed)
+            except ValueError:
+                r_now = 0
+        else:
+            r_now = 0
+
+        next_due = datetime.strptime(nr, '%Y-%m-%d')
+        elapsed_at_due = max(0, (next_due - today).days)
+        if lr:
+            elapsed_at_due = max(0, (next_due - datetime.strptime(lr, '%Y-%m-%d')).days)
+        r_due = predict_retention(s, elapsed_at_due) if lr else 0
+
+        now_retained += r_now
+        if nr <= today.strftime('%Y-%m-%d'):
+            due_count += 1
+            due_retained += r_now
+
+        card_estimates.append(
+            (c.get('questionId', '?'), s, d, r_now, r_due, nr <= today.strftime('%Y-%m-%d'))
+        )
+
+    avg_stability /= total
+    avg_difficulty /= total
+    avg_retention = now_retained / total * 100
+    avg_due_retention = due_retained / max(1, due_count) * 100
+
+    print(f'{CYAN}=== FSRS Memory Model: {topic} ==={NC}\n')
+    print(f'Cards: {total}')
+    print(f'Avg stability: {avg_stability:.1f} days')
+    print(f'Avg difficulty: {avg_difficulty:.1f}/10')
+    print(f'Avg retention (now): {avg_retention:.0f}%')
+    print(f'Due cards: {due_count} (avg retention: {avg_due_retention:.0f}%)')
+    print(f'Stable (S >= 21d): {sum(1 for c in cards.values() if c.get("stability", 0) >= 21)}')
+    print(f'Mature (S >= 90d): {sum(1 for c in cards.values() if c.get("stability", 0) >= 90)}')
+    print()
+
+    # Cards with lowest predicted retention
+    card_estimates.sort(key=lambda x: x[3])
+    print(f'{YELLOW}Weakest cards (lowest current retention):{NC}')
+    for qid, s, d, r_now, r_due, is_due in card_estimates[:5]:
+        due_tag = f'{RED}DUE{NC}' if is_due else ''
+        print(f'  {qid}: S={s:.0f}d, D={d:.1f}, retention={r_now:.0f}% {due_tag}')
+
+
+def cmd_render_diagrams(
+    topic: str,
+    module: Optional[str] = None,
+    render_mode: str = 'api',
+    scale: int = 2,
+):
+    """Render ```mermaid blocks in lesson.md to PNG.
+
+    Args:
+        render_mode: 'api' (mermaid.ink) or 'local' (mmdc CLI)
+        scale: PNG scale factor (2 = 300dpi)
+    """
+    _check_topic(topic)
+
+    try:
+        from render_diagrams import render_lesson_diagrams
+    except ImportError:
+        print(f'{RED}render_diagrams.py not found in scripts directory.{NC}')
+        sys.exit(1)
+
+    if module:
+        mods = [module]
+    else:
+        mods = _list_modules(topic)
+
+    if not mods:
+        print(f'{YELLOW}No modules found.{NC}')
+        return
+
+    total = 0
+    for m in mods:
+        lesson_path = _module_path(topic, m) / 'lesson.md'
+        if not lesson_path.exists():
+            print(f'{YELLOW}No lesson.md in module {m}, skipping{NC}')
+            continue
+        print(f'{CYAN}Rendering diagrams: {topic}/{m}{NC}')
+        count = render_lesson_diagrams(str(lesson_path), mode=render_mode, scale=scale)
+        if count:
+            print(f'  Rendered {count} diagram(s) to PNG')
+            total += count
+
+    if total:
+        print(f'{GREEN}Total: {total} diagram(s) rendered.{NC}')
+    else:
+        print(f'{YELLOW}No diagrams rendered.{NC}')
+
+
+def cmd_mindmap(topic: str, module: str):
+    """Generate/regenerate Mermaid mindmap for a module via LLM."""
+    _check_topic(topic)
+    path = _check_module(topic, module)
+    lesson = path / 'lesson.md'
+    if not lesson.exists():
+        print(f'{RED}No lesson.md at {lesson}{NC}')
+        sys.exit(1)
+
+    try:
+        from enrich import _call_llm
+    except ImportError:
+        print(f'{RED}enrich.py not found in scripts directory.{NC}')
+        sys.exit(1)
+
+    content = lesson.read_text()
+
+    # Check if mindmap already exists
+    has_mindmap = '```mermaid\nmindmap' in content
+
+    prompt = (
+        f'Current lesson content:\n\n{content}\n\n'
+        'Task: Add a Mermaid mindmap at the top of this lesson (after metadata, before Learning Objectives). '
+        "Show the module's knowledge hierarchy: central concept → key topics → sub-concepts. "
+        'Use `mindmap` syntax. Max 3 levels deep. Keep concise.\n'
+        'Format: ```mermaid\nmindmap\n  root((Title))\n    Topic\n      Sub\n```\n'
+    )
+
+    if has_mindmap:
+        prompt += 'Replace the existing mindmap section with an updated one.\n'
+    else:
+        prompt += 'Insert the mindmap after the diagrams HTML comment and before ## Learning Objectives.\n'
+
+    prompt += 'Return the full lesson with mindmap inserted/replaced at top.'
+
+    system = (
+        'You are a learning science expert. Generate Mermaid mindmaps that show '
+        'knowledge hierarchy for a module. Output only the enhanced markdown, no explanation.'
+    )
+
+    print(f'{CYAN}Generating mindmap for {topic}/{module}...{NC}', end=' ', flush=True)
+    result = _call_llm(prompt, system)
+
+    # Backup and write
+    bak = lesson.with_suffix('.md.bak')
+    shutil.copy2(lesson, bak)
+    lesson.write_text(result)
+    print('done')
+    print(f'  Backup: {bak}')
+    print(f'  Written: {lesson}')
+
+
+# ── CLI ─────────────────────────────────────────────────────────
+
+app = typer.Typer(help='Learn Something — study with spaced repetition (FSRS).')
+
+app.command('init')(cmd_init)
+app.command('start')(cmd_start)
+app.command('create-module')(cmd_create_module)
+app.command('create-cloze')(cmd_create_cloze)
+app.command('quiz')(cmd_quiz)
+app.command('cloze')(cmd_cloze)
+app.command('cumulative-quiz')(cmd_cumulative_quiz)
+app.command('explain')(cmd_explain)
+app.command('review')(cmd_review)
+app.command('stats')(cmd_stats)
+app.command('export')(cmd_export)
+app.command('rate')(cmd_rate)
+app.command('flag')(cmd_flag)
+app.command('feedback')(cmd_feedback)
+app.command('analytics')(cmd_analytics)
+app.command('forecast')(cmd_forecast)
+app.command('study-plan')(cmd_study_plan)
+app.command('epub')(cmd_epub)
+app.command('epub-regen')(cmd_epub_regen)
+app.command('epub-verify')(cmd_epub_verify)
+app.command('epub-list-themes')(cmd_epub_list_themes)
+app.command('pdf')(cmd_pdf)
+app.command('pdf-regen')(cmd_pdf_regen)
+app.command('sync')(cmd_sync)
+app.command('sync-pull')(cmd_sync_pull)
+app.command('validate')(cmd_validate)
+app.command('validate-content')(cmd_validate_content)
+app.command('feynman')(cmd_explain)
+app.command('enrich')(cmd_enrich)
+app.command('blurting')(cmd_blurting)
+app.command('fsrs-predict')(cmd_fsrs_predict)
+app.command('render-diagrams')(cmd_render_diagrams)
+app.command('mindmap')(cmd_mindmap)
+
+
+def _reader_subjects_path(reader_path=None):
+    """Return the Reader's subjects directory."""
+    if reader_path:
+        return Path(reader_path)
+    return Path.home() / '.coursereader' / 'subjects'
+
+
 if __name__ == '__main__':
-    main()
+    app()
