@@ -1,12 +1,6 @@
 # Study Protocol
 
-Three learning theories fused:
-
-| Theory                     | Focus                                   | In practice                                                          |
-| -------------------------- | --------------------------------------- | -------------------------------------------------------------------- |
-| **Marva Collins**          | Rigor, repetition, high expectations    | Read thoroughly, reframe in own words, answer precisely, no slacking |
-| **Feynman Technique**      | Explain simply, find gaps               | Teach concept to imaginary child. If explanation fuzzy — gap found   |
-| **Desirable Difficulties** | Make recall harder = retention stronger | Spaced repetition, mixed modules, varied MCQ difficulty              |
+Learner-facing quick reference. Full pedagogy + schema contract in `SKILL.md` (Part A1 pedagogy, Part A5 sessions, Part B1 structure).
 
 ## Session types
 
@@ -26,17 +20,23 @@ Three learning theories fused:
 4. For deeper probing: open opencode chat, explain concept to AI. AI finds gaps.
 
 ### REVIEW (10-15 min, daily) — Desirable Difficulties
-1. `learn.sh <topic> review` → due cards SM-2
+1. `learn.sh <topic> review` → due cards FSRS-5
 2. Cards mixed from multiple modules (interleaved)
 3. Correct → interval grows. Wrong → reset 1d.
 4. `learn.sh <topic> stats` → retention, weak areas
+
+### CUMULATIVE (20-30 min) — Desirable Difficulties + Marva
+1. `learn.sh <topic> cumulative-quiz --modules X-Y`
+2. 8-10 questions mixing MCQ, cloze, T/F across modules
+3. Cross-module connections tested — not just isolated recall
+4. Wrong answers → review weak modules
 
 ### MIXED (30-45 min) — all three
 - REVIEW 10 min
 - LEARN 25 min (one new module)
 - EXPLAIN 5 min (Feynman check on new module)
 
-## Spaced Repetition (SM-2)
+## Spaced Repetition (FSRS-5)
 
 Each MCQ = 1 SRS card.
 
@@ -46,21 +46,6 @@ Each MCQ = 1 SRS card.
 | Wrong       | Reset to 1d, re-learn             |
 
 Ease factor min 1.3. Adjusts per card based on answer history.
-
-## Directory structure
-
-```
-<topic>/
-├── syllabus.yaml       # Full course plan (includes language: en|zh|yue)
-├── modules/
-│   ├── NN-name/
-│   │   ├── lesson.md   # Content + Feynman prompt + reframe
-│   │   └── quiz.yaml   # 8-10 MCQs
-│   └── ...
-└── srs/
-    ├── deck.json       # SM-2 card states
-    └── stats.json      # Study history
-```
 
 ## Tips
 

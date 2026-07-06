@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://learn-something.dev/schemas/syllabus.json",
+  "title": "Course Syllabus",
+  "description": "Schema for syllabus.yaml — course skeleton with module metadata",
+  "type": "object",
+  "required": ["subject", "modules"],
+  "properties": {
+    "subject": {
+      "type": "string",
+      "pattern": "^(?![a-z0-9]+(-[a-z0-9]+)*$).*$",
+      "description": "Course title (human-readable; rejects raw slugs like 'foo-bar')"
+    },
+    "language": {
+      "type": "string",
+      "default": "en",
+      "description": "Course language code"
+    },
+    "time_budget_hours": {
+      "type": "number",
+      "maximum": 200,
+      "description": "Total estimated study hours (guideline: 40h)"
+    },
+    "target_level": {
+      "type": "string",
+      "description": "Expected learner level: beginner, intermediate, advanced"
+    },
+    "domain": {
+      "type": "string",
+      "description": "Subject domain category"
+    },
+    "prerequisites": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Required prior knowledge"
+    },
+    "learning_objectives": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Course-level intended learning outcomes"
+    },
+    "modules": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/module" },
+      "minItems": 1
+    }
+  },
+  "$defs": {
+    "module": {
+      "type": "object",
+      "required": ["id", "name", "time_hours", "prerequisites", "topics"],
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Module number (1-indexed)"
+        },
+        "name": {
+          "type": "string",
+          "description": "Module directory name (e.g. '01-intro')"
+        },
+        "time_hours": {
+          "type": "number",
+          "maximum": 1.5,
+          "description": "Estimated study hours for this module (hard cap: 1.5h regardless of level)"
+        },
+        "prerequisites": {
+          "type": "array",
+          "items": { "type": "integer" },
+          "description": "Module IDs this module depends on (forms DAG)"
+        },
+        "topics": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Subtopics covered in this module"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://learn-something.dev/schemas/feedback.json",
+  "title": "Module Feedback",
+  "description": "Schema for srs/feedback.json — learner ratings and content flags",
+  "type": "object",
+  "properties": {
+    "ratings": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/rating" }
+    },
+    "flags": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/flag" }
+    }
+  },
+  "$defs": {
+    "rating": {
+      "type": "object",
+      "required": ["module", "score", "date"],
+      "properties": {
+        "module": {
+          "type": "string",
+          "description": "Module directory name"
+        },
+        "score": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5,
+          "description": "Rating: 1=poor, 5=excellent"
+        },
+        "date": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 datetime of rating"
+        },
+        "comment": {
+          "type": "string",
+          "description": "Optional comment"
+        }
+      }
+    },
+    "flag": {
+      "type": "object",
+      "required": ["module", "type", "date"],
+      "properties": {
+        "module": {
+          "type": "string",
+          "description": "Module directory name"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["wrong", "outdated", "confusing"],
+          "description": "Flag type"
+        },
+        "detail": {
+          "type": "string",
+          "description": "Details about the issue"
+        },
+        "date": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 datetime of flag"
+        }
+      }
+    }
+  }
+}

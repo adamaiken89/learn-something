@@ -1,0 +1,20 @@
+- id: "c.1"
+  question: "Complete: [sentence with {blank} for key term]"
+  answer: "[blank term]"
+  explanation: "[Why this term matters]"
+  difficulty: 1
+  tags: [terminology]
+
+- id: "c.2"
+  question: "Complete: [conceptual sentence with {blank}]"
+  answer: "[blank term]"
+  explanation: "[Reasoning chain]"
+  difficulty: 2
+  tags: [concept]
+
+- id: "c.3"
+  question: "Complete: [application sentence with {blank}]"
+  answer: "[blank term]"
+  explanation: "[Why this matters in practice]"
+  difficulty: 3
+  tags: [application]

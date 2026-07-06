@@ -1,0 +1,18 @@
+{
+  "name": "@learn-something/schema",
+  "version": "1.0.0",
+  "description": "Shared JSON Schema definitions for learn-something ecosystem",
+  "main": "types/index.ts",
+  "types": "types/index.ts",
+  "files": [
+    "schemas/",
+    "types/",
+    "validate/"
+  ],
+  "scripts": {
+    "validate": "python3 validate/python/validate.py",
+    "check": "tsc --noEmit types/index.ts"
+  },
+  "keywords": ["learn-something", "schema", "srs", "spaced-repetition"],
+  "license": "MIT"
+}

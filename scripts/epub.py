@@ -816,6 +816,7 @@ def _highlight_html(html, tokens):
 # ── Mermaid diagram rendering ──────────────────────────────────
 
 MERMAID_DEFAULT_MODE = 'api'
+DIAGRAM_DIR = 'diagrams'
 
 
 def _mermaid_render(source, mode, tmp_dir, idx):
@@ -853,7 +854,7 @@ def _mermaid_render_api(source):
 
         encoded = base64.urlsafe_b64encode(source.encode('utf-8')).decode('ascii')
         url = f'https://mermaid.ink/svg/{encoded}'
-        req = urllib.request.Request(url, headers={'User-Agent': 'learn-anything/1.0'})
+        req = urllib.request.Request(url, headers={'User-Agent': 'learn-something/1.0'})
         with urllib.request.urlopen(req, timeout=15) as resp:
             return resp.read().decode('utf-8')
     except (urllib.error.URLError, OSError, ValueError):
@@ -1186,38 +1187,38 @@ def generate_cover_svg(title, author='', description='', theme_tokens=None, chap
 
     accent_line_y = overlay_y + 10
     svg_parts.append(
-        f'<rect x="100" y="{accent_line_y}" width="160" height="8" fill="{pal["primary"]}" rx="4"/>'
+        f'<rect x="100" y="{accent_line_y}" width="220" height="10" fill="{pal["primary"]}" rx="5"/>'
     )
 
-    title_font = 100
+    title_font = 140
     title_x = 100
-    title_y = accent_line_y + 120
+    title_y = accent_line_y + 140
     title_lines = _wrap_text(title, w - 200, title_font)
     for i, line in enumerate(title_lines):
         svg_parts.append(
-            f'<text x="{title_x}" y="{title_y + i * 120}" font-family="Georgia, serif" font-size="{title_font}" font-weight="bold" fill="{pal["text"]}">{escape(line)}</text>'
+            f'<text x="{title_x}" y="{title_y + i * 160}" font-family="Georgia, serif" font-size="{title_font}" font-weight="bold" fill="{pal["text"]}">{escape(line)}</text>'
         )
 
-    desc_font = 42
-    desc_y = title_y + len(title_lines) * 120 + 40
+    desc_font = 60
+    desc_y = title_y + len(title_lines) * 160 + 50
     if description:
         desc_lines = _wrap_text(description, w - 200, desc_font)
         for i, line in enumerate(desc_lines[:3]):
             svg_parts.append(
-                f'<text x="{title_x}" y="{desc_y + i * 56}" font-family="Georgia, serif" font-size="{desc_font}" fill="{pal["text"]}" opacity="0.7">{escape(line)}</text>'
+                f'<text x="{title_x}" y="{desc_y + i * 72}" font-family="Georgia, serif" font-size="{desc_font}" fill="{pal["text"]}" opacity="0.7">{escape(line)}</text>'
             )
-        desc_y += len(desc_lines[:3]) * 56 + 20
+        desc_y += len(desc_lines[:3]) * 72 + 30
 
     if chapter_count > 0:
         subtitle = f'{chapter_count} modules'
         svg_parts.append(
-            f'<text x="{title_x}" y="{desc_y + 20}" font-family="Arial, sans-serif" font-size="28" fill="{pal["primary"]}" opacity="0.8">{escape(subtitle)}</text>'
+            f'<text x="{title_x}" y="{desc_y + 30}" font-family="Arial, sans-serif" font-size="40" fill="{pal["primary"]}" opacity="0.8">{escape(subtitle)}</text>'
         )
-        desc_y += 56
+        desc_y += 72
 
     if author:
         svg_parts.append(
-            f'<text x="{title_x}" y="{h - 120}" font-family="Arial, sans-serif" font-size="32" fill="{pal["text"]}" opacity="0.5">{escape(author)}</text>'
+            f'<text x="{title_x}" y="{h - 120}" font-family="Arial, sans-serif" font-size="48" fill="{pal["text"]}" opacity="0.5">{escape(author)}</text>'
         )
 
     svg_parts.append('</svg>')
@@ -1267,12 +1268,19 @@ def split_chapters(text):
 
 
 def collect_subject_md(subject_dir):
+    """Collect subject markdown + diagram image assets.
+
+    Returns:
+        (markdown_text, assets_dict) where assets_dict maps
+        unique_name -> PNG bytes for diagram images.
+    """
     modules_dir = os.path.join(subject_dir, 'modules')
     if not os.path.isdir(modules_dir):
         print(f'Missing: {modules_dir}', file=sys.stderr)
         sys.exit(1)
 
     parts = []
+    assets = {}  # {unique_name: PNG bytes} for diagram images
     mod_names = sorted(
         d for d in os.listdir(modules_dir) if os.path.isdir(os.path.join(modules_dir, d))
     )
@@ -1281,48 +1289,65 @@ def collect_subject_md(subject_dir):
         mod_path = os.path.join(modules_dir, name)
         lesson_path = os.path.join(mod_path, 'lesson.md')
         quiz_path = os.path.join(mod_path, 'quiz.yaml')
+        diag_path = os.path.join(mod_path, 'diagrams')
 
         if i > 0:
             parts.append('\n---\n')
 
         if os.path.isfile(lesson_path):
             with open(lesson_path, 'r', encoding='utf-8') as f:
-                parts.append(f.read().rstrip())
+                lesson_text = f.read()
 
-        if os.path.isfile(quiz_path) and HAS_YAML:
-            with open(quiz_path, 'r', encoding='utf-8') as f:
-                try:
-                    questions = yaml.safe_load(f)
-                    if questions:
-                        parts.append(f'\n## Quiz: {name}\n')
-                    for qi, q in enumerate(questions):
-                        if qi > 0:
-                            parts.append('<hr/>\n')
-                        ans = q.get('answer', '')
-                        diff = q.get('difficulty', 0)
-                        stars = '★' * diff + '☆' * (3 - diff) if 1 <= diff <= 3 else ''
-                        qtext = escape(q.get('question', ''))
-                        parts.append(f'<p class="quiz-question">{qtext}</p>\n')
-                        if stars:
-                            parts.append(f'<p class="quiz-difficulty">{stars}</p>\n')
-                        for k in ('A', 'B', 'C', 'D'):
-                            opts = q.get('options', {})
-                            v = opts.get(k) or opts.get(k.lower(), '')
-                            parts.append(
-                                f'<p class="quiz-option"><strong>{k}.</strong> {escape(v)}</p>\n'
-                            )
-                        parts.append(
-                            f'<p class="quiz-answer"><strong>Answer:</strong> {escape(ans)}</p>\n'
+            # Collect diagram images and adjust paths
+            if os.path.isdir(diag_path):
+                for fname in sorted(os.listdir(diag_path)):
+                    if fname.lower().endswith('.png'):
+                        src_path = os.path.join(diag_path, fname)
+                        with open(src_path, 'rb') as f:
+                            data = f.read()
+                        asset_key = f'{name}_{fname}'
+                        assets[asset_key] = data
+                        # Replace relative diagram paths with EPUB-internal paths
+                        lesson_text = lesson_text.replace(
+                            f'({DIAGRAM_DIR}/{fname})',
+                            f'({asset_key})',
                         )
-                        expl = escape(q.get('explanation', ''))
-                        if expl:
-                            parts.append(f'<p class="quiz-explanation">{expl}</p>\n')
-                except Exception as e:
-                    parts.append(f'\n## Quiz: {name}\n\n(quiz parse error: {e})\n')
+
+            parts.append(lesson_text.rstrip())
+        if os.path.isfile(quiz_path) and HAS_YAML:
+            try:
+                with open(quiz_path, 'r', encoding='utf-8') as f:
+                    questions = yaml.safe_load(f)
+                if questions:
+                    parts.append(f'\n## Quiz: {name}\n')
+                for qi, q in enumerate(questions):
+                    if qi > 0:
+                        parts.append('<hr/>\n')
+                    ans = q.get('answer', '')
+                    diff = q.get('difficulty', 0)
+                    stars = '★' * diff + '☆' * (3 - diff) if 1 <= diff <= 3 else ''
+                    qtext = escape(q.get('question', ''))
+                    parts.append(f'<p class="quiz-question">{qtext}</p>\n')
+                    if stars:
+                        parts.append(f'<p class="quiz-difficulty">{stars}</p>\n')
+                    for k in ('A', 'B', 'C', 'D'):
+                        opts = q.get('options', {})
+                        v = opts.get(k) or opts.get(k.lower(), '')
+                        parts.append(
+                            f'<p class="quiz-option"><strong>{k}.</strong> {escape(v)}</p>\n'
+                        )
+                    parts.append(
+                        f'<p class="quiz-answer"><strong>Answer:</strong> {escape(ans)}</p>\n'
+                    )
+                    expl = escape(q.get('explanation', ''))
+                    if expl:
+                        parts.append(f'<p class="quiz-explanation">{expl}</p>\n')
+            except Exception as e:
+                parts.append(f'\n## Quiz: {name}\n\n(quiz parse error: {e})\n')
         elif os.path.isfile(quiz_path):
             parts.append(f'\n## Quiz: {name}\n\n(install yaml library to include quizzes)\n')
 
-    return '\n'.join(parts)
+    return '\n'.join(parts), assets
 
 
 # ── Hierarchical ToC navigation ────────────────────────────────
@@ -1472,13 +1497,17 @@ def generate_epub(
     chapters,
     output_path,
     title,
-    author='Learn Anything',
+    author='Learn Something',
     mermaid_mode='api',
     description='',
     theme_tokens=None,
+    assets=None,
 ):
     uid = str(uuid.uuid4())
     now = datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+    if theme_tokens is None:
+        themes = load_themes()
+        theme_tokens = get_theme('notebook', themes)
     css = make_css(theme_tokens, use_pygments=HAS_PYGMENTS)
 
     parent = os.path.dirname(os.path.abspath(output_path))
@@ -1488,6 +1517,10 @@ def generate_epub(
     manifest = []
     spine = []
     all_svg_files = []
+    all_png_files = []
+
+    if assets is None:
+        assets = {}
 
     tmp_dir = tempfile.mkdtemp(prefix='opencode-mermaid-')
 
@@ -1576,6 +1609,13 @@ html, body {{ margin:0; padding:0; height:100%; }}
         svg_idx += 1
         manifest.append((svg_fname, 'image/svg+xml', f'svg{svg_idx}'))
 
+    png_idx = 0
+    for asset_key, png_bytes in assets.items():
+        png_idx += 1
+        fname = f'img_{asset_key}'
+        all_png_files.append((fname, png_bytes))
+        manifest.append((fname, 'image/png', f'img{png_idx}'))
+
     opf_manifest = '<item id="css" href="style.css" media-type="text/css"/>\n'
     for fname, mtype, pid in manifest:
         props = ' properties="cover-image"' if pid == 'cover-image' else ''
@@ -1618,6 +1658,8 @@ html, body {{ margin:0; padding:0; height:100%; }}
                 zf.writestr(f'EPUB/{fname}', content)
             for svg_fname, svg_content in all_svg_files:
                 zf.writestr(f'EPUB/{svg_fname}', svg_content)
+            for png_fname, png_bytes in all_png_files:
+                zf.writestr(f'EPUB/{png_fname}', png_bytes)
             zf.writestr('EPUB/toc.ncx', ncx_content)
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
@@ -1745,7 +1787,7 @@ def verify_epub(path):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='EPUB builder for Learn Anything')
+    parser = argparse.ArgumentParser(description='EPUB builder for Learn Something')
     sub = parser.add_subparsers(dest='command')
 
     p_build = sub.add_parser('build', help='Build EPUB from subject directory')
@@ -1753,7 +1795,7 @@ def main():
     p_build.add_argument('output')
     p_build.add_argument('--theme', default='notebook', help='Theme name (default: notebook)')
     p_build.add_argument('--title', default=None)
-    p_build.add_argument('--author', default='Learn Anything')
+    p_build.add_argument('--author', default='Learn Something')
     p_build.add_argument('--description', default='', help='Cover page description')
     p_build.add_argument(
         '--mermaid',
@@ -1770,7 +1812,7 @@ def main():
     p_md.add_argument('output')
     p_md.add_argument('--theme', default='notebook', help='Theme name (default: notebook)')
     p_md.add_argument('--title', default=None)
-    p_md.add_argument('--author', default='Learn Anything')
+    p_md.add_argument('--author', default='Learn Something')
     p_md.add_argument('--description', default='', help='Cover page description')
     p_md.add_argument(
         '--mermaid',
@@ -1841,11 +1883,12 @@ def main():
         title = args.title or _format_title(os.path.basename(os.path.normpath(subject_dir)))
         author = args.author
         description = args.description
-        md_text = collect_subject_md(subject_dir)
+        md_text, assets = collect_subject_md(subject_dir)
         book_md = os.path.join(subject_dir, 'book.md')
         with open(book_md, 'w', encoding='utf-8') as f:
             f.write(md_text)
         print(f'Intermediate markdown: {book_md}')
+        print(f'Diagram assets: {len(assets)} PNG file(s)')
     else:
         md_file = args.markdown_file
         if not os.path.isfile(md_file):
@@ -1856,6 +1899,7 @@ def main():
         description = args.description
         with open(md_file, 'r', encoding='utf-8') as f:
             md_text = f.read()
+        assets = {}
 
     output = args.output
     chapters = split_chapters(md_text)
@@ -1869,6 +1913,7 @@ def main():
         mermaid_mode=args.mermaid,
         description=description,
         theme_tokens=tokens,
+        assets=assets,
     )
     size_kb = os.path.getsize(output) / 1024
     print(f'EPUB: {output} ({len(chapters)} chapters, {size_kb:.1f} KB)')

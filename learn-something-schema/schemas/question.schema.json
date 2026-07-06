@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://learn-something.dev/schemas/question.json",
+  "title": "Quiz Question",
+  "description": "Schema for a single quiz question",
+  "type": "object",
+  "required": ["id", "question", "options", "answer", "difficulty", "tags"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+$",
+      "description": "Question ID: {moduleNum}.{questionNum}, e.g. '1.2'"
+    },
+    "question": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Question text"
+    },
+    "options": {
+      "type": "object",
+      "minProperties": 4,
+      "maxProperties": 4,
+      "additionalProperties": { "type": "string" },
+      "description": "Answer options with lowercase keys: a, b, c, d"
+    },
+    "answer": {
+      "type": "string",
+      "enum": ["a", "b", "c", "d"],
+      "description": "Correct answer key"
+    },
+    "explanation": {
+      "type": "string",
+      "description": "Why this answer is correct"
+    },
+    "difficulty": {
+      "type": "integer",
+      "enum": [1, 2, 3],
+      "description": "1=recall, 2=comprehension, 3=application"
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Content tags: terminology, concept, formula, scenario, comparison, calculation"
+    }
+  }
+}
