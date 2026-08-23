@@ -75,16 +75,27 @@ def validate_mermaid(content):
                             (idx, f'Invalid hex color: {color} (non-hex characters)')
                         )
 
-        # Check subgraph/end pairing
-        subgraph_count = len(re.findall(r'^\s*subgraph\b', block_stripped, re.MULTILINE))
-        end_count = len(re.findall(r'^\s*end\b', block_stripped, re.MULTILINE))
-        if subgraph_count != end_count:
-            errors.append(
-                (
-                    idx,
-                    f'subgraph/end mismatch: {subgraph_count} subgraph(s), {end_count} end(s)',
+        # Check subgraph/end pairing — only flowchart/graph families use
+        # `subgraph ... end` blocks. Other types (sequenceDiagram alt/end,
+        # gantt, mindmap...) have their own block keywords and must not be
+        # counted here (false-positive source).
+        diagram_kw = first_line.split()[0].rstrip(';') if first_line.split() else ''
+        if diagram_kw in ('flowchart', 'graph'):
+            subgraph_count = len(re.findall(r'^\s*subgraph\b', block_stripped, re.MULTILINE))
+            end_count = len(
+                re.findall(
+                    r'^\s*(?:end\b|endif\b|endwhile\b|endswitch\b)',
+                    block_stripped,
+                    re.MULTILINE,
                 )
             )
+            if subgraph_count != end_count:
+                errors.append(
+                    (
+                        idx,
+                        f'subgraph/end mismatch: {subgraph_count} subgraph(s), {end_count} end(s)',
+                    )
+                )
 
     return errors
 

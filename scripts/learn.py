@@ -1772,7 +1772,13 @@ def cmd_sync_pull(topic: str, reader_path: Optional[str] = None):
     print(f'  Deck: {len(cards)} cards')
 
 
-def cmd_validate(topic: str, module: Optional[str] = None, max_chars: Optional[int] = None):
+def cmd_validate(
+    topic: str,
+    module: Optional[str] = None,
+    max_chars: Optional[int] = None,
+    offline: bool = False,
+    fast: bool = False,
+):
     """Full quality gate: schema + content syntax + quality checks. All checks ERR (rule 16 is WARN)."""
     t = _topic_path(topic)
     if not t.exists():
@@ -1781,7 +1787,7 @@ def cmd_validate(topic: str, module: Optional[str] = None, max_chars: Optional[i
 
     results = []
     results += _schema_errors(t, yaml_available())
-    results += _content_syntax_errors(t, module)
+    results += _content_syntax_errors(t, module, offline=offline or fast)
     results += _quality_checks(t, module, max_chars or 12000)
 
     # Report
@@ -1930,6 +1936,49 @@ def _check_mmdc():
         return False
 
 
+# ── Linter resolution chains ────────────────────────────────────
+#
+# Ground truth is the real linter; naive basic checkers are last resort
+# and known to produce false positives (e.g. sequenceDiagram alt/end read
+# as subgraph/end mismatch, globs in code spans read as unclosed italics).
+#
+# Resolution order:
+#   markdown: global `pymarkdown` → `uvx --from pymarkdownlnt pymarkdown`
+#             → `pipx run --spec pymarkdownlnt pymarkdown` → basic
+#   mermaid:  global `mmdc` → `npx -y @mermaid-js/mermaid-cli` → basic
+#
+# Network-backed fallbacks are skipped under offline/fast mode, so basic
+# false positives can only surface when explicitly opted out.
+
+
+def _resolve_md_linter(offline=False):
+    """Return (argv_prefix or None, via_network).
+
+    argv_prefix runs the pymarkdown CLI: <prefix> scan <file>.
+    """
+    if _check_pymarkdownlnt():
+        return ['pymarkdown'], False
+    if not offline:
+        if shutil.which('uvx'):
+            # package console-script is `pymarkdown`, not `pymarkdownlnt`
+            return ['uvx', '--from', 'pymarkdownlnt', 'pymarkdown'], True
+        if shutil.which('pipx'):
+            return ['pipx', 'run', '--spec', 'pymarkdownlnt', 'pymarkdown'], True
+    return None, False
+
+
+def _resolve_mmdc(offline=False):
+    """Return (argv_prefix or None, via_network).
+
+    argv_prefix renders a diagram: <prefix> -i tmp.mmd -t neutral --quiet.
+    """
+    if _check_mmdc():
+        return ['mmdc'], False
+    if not offline and shutil.which('npx'):
+        return ['npx', '-y', '@mermaid-js/mermaid-cli'], True
+    return None, False
+
+
 def _validate_markdown_basic(filepath):
     """Basic markdown validation without external tools.
     Returns list of (line, message) tuples."""
@@ -1990,12 +2039,14 @@ def _validate_markdown_basic(filepath):
             continue
         if in_code_block:
             continue
-        # Count unescaped ** pairs
-        double_stars = len(re.findall(r'(?<!\*)\*\*(?!\*)', line))
+        # Count unescaped ** pairs (ignore inline code spans: globs like
+        # `*.module.css` or `dist/**` are not emphasis markers)
+        line_prose = re.sub(r'`[^`]*`', '``', line)
+        double_stars = len(re.findall(r'(?<!\*)\*\*(?!\*)', line_prose))
         if double_stars % 2 != 0:
             errors.append((i, 'Unclosed ** (bold) marker'))
         # Count unescaped * (not **, not ***)
-        single_stars = len(re.findall(r'(?<!\*)\*(?!\*)', line)) - double_stars * 2
+        single_stars = len(re.findall(r'(?<!\*)\*(?!\*)', line_prose)) - double_stars * 2
         if single_stars % 2 != 0:
             # Could be valid if it's a list item marker, check context
             stripped = line.strip()
@@ -2035,19 +2086,23 @@ def _validate_mermaid_basic(content):
     return mermaidcheck.validate_mermaid(content)
 
 
-def _content_syntax_errors(t, module=None):
+def _content_syntax_errors(t, module=None, offline=False):
     """Pass 2: markdown + mermaid syntax validation of lesson.md files."""
     results = []
 
-    has_pymarkdown = _check_pymarkdownlnt()
-    has_mmdc = _check_mmdc()
+    md_cmd, md_net = _resolve_md_linter(offline)
+    mmdc_cmd, mmdc_net = _resolve_mmdc(offline)
 
-    if not has_pymarkdown:
-        print(f'{YELLOW}pymarkdownlnt not installed — using basic markdown checks{NC}')
+    if md_cmd is None:
+        print(f'{YELLOW}no markdown linter available — using basic checks (false positives possible){NC}')
         print(f'{YELLOW}Install: pip install pymarkdownlnt{NC}')
-    if not has_mmdc:
-        print(f'{YELLOW}mmdc not installed — using basic mermaid checks{NC}')
+    elif md_net:
+        print(f'{YELLOW}pymarkdownlnt not installed — using {"uvx" if md_cmd[0] == "uvx" else "pipx"} fallback (downloads on first use; --offline skips){NC}')
+    if mmdc_cmd is None:
+        print(f'{YELLOW}mmdc not installed — using basic mermaid checks (false positives possible){NC}')
         print(f'{YELLOW}Install: npm install -g @mermaid-js/mermaid-cli{NC}')
+    elif mmdc_net:
+        print(f'{YELLOW}mmdc not installed — using npx fallback (cached after first use; --offline skips){NC}')
 
     if module:
         mods = [module]
@@ -2064,13 +2119,13 @@ def _content_syntax_errors(t, module=None):
         mermaid_errors = []
 
         # Markdown validation
-        if has_pymarkdown:
+        if md_cmd:
             try:
                 result = subprocess.run(
-                    ['pymarkdown', 'scan', str(lesson_path)],
+                    [*md_cmd, 'scan', str(lesson_path)],
                     capture_output=True,
                     text=True,
-                    timeout=30,
+                    timeout=60 if len(md_cmd) > 1 else 30,
                 )
                 for line in result.stdout.splitlines():
                     if line.startswith('MD'):
@@ -2086,7 +2141,7 @@ def _content_syntax_errors(t, module=None):
 
         # Mermaid validation
         content = lesson_path.read_text()
-        if has_mmdc:
+        if mmdc_cmd:
             blocks = re.findall(r'```mermaid\s*\n(.*?)```', content, re.DOTALL)
             for idx, block in enumerate(blocks, 1):
                 if not block.strip():
@@ -2099,10 +2154,10 @@ def _content_syntax_errors(t, module=None):
                     tmp_path = f.name
                 try:
                     result = subprocess.run(
-                        ['mmdc', '-i', tmp_path, '-t', 'neutral', '--quiet'],
+                        [*mmdc_cmd, '-i', tmp_path, '-t', 'neutral', '--quiet'],
                         capture_output=True,
                         text=True,
-                        timeout=30,
+                        timeout=120 if len(mmdc_cmd) > 1 else 30,
                     )
                     if result.returncode != 0:
                         err_msg = (
