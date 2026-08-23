@@ -79,7 +79,7 @@ Three theories fused:
 - **Skip permitted**: Learner gives sparse input? Generate content anyway with sensible defaults. Do not block.
 - **Socratic throughout**: Every major concept followed by a question that makes learner stop and think — not only at module end. Pattern: state concept → ask "why?" / "what if?" → answer immediately so learner can self-check.
 
-### Quality rules (16) — enforced by `learn.sh validate`
+### Quality rules (17) — enforced by `learn.sh validate`
 
 All 17 below have an automated check in the quality gate (see B5). `Mindmap` (15) is ERR; the rest are WARN — including `Module size` (16), which is advisory only because the real size control is the module time budget, and `Human-readable title` (17), which catches the H1 slug leak.
 
@@ -308,7 +308,7 @@ Auto-fix most of these + normalize shapes with `python3 scripts/migrate_courses.
 | Pass | Checks | Severity |
 |---|---|---|
 | 1. Schema | quiz/cloze/cumulative/syllabus/deck/feedback vs JSON Schema; module dir naming; junk files | ERR |
-| 2. Content syntax | markdown (pymarkdownlnt or basic) + mermaid (mmdc or basic) on lesson.md | ERR |
+| 2. Content syntax | markdown (pymarkdownlnt or basic) + mermaid via **mmdc (required — no fallback; install `npm i -g @mermaid-js/mermaid-cli`)** on lesson.md | ERR |
 | 3. Quality | Rule 15 ERR: mindmap present. Rule 16 WARN only: lesson.md char count > `--max-chars` (default 12,000) — time budget (`time_hours` ≤1.5h) is the real size cap. Rule 17 WARN only: H1 must be `# Module NN: <name>` — plain number, no dir slug | ERR for 15; WARN for 16, 17 |
 | 4. Quality (statistical) | Rules 1-14 signals: Think/Cloze/Predict/Spot-the-Mistake blocks, mermaid diagrams, difficulty mix, answer rotation/spread, item counts, Q-per-LO, cumulative coverage + type mix | ERR |
 

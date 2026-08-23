@@ -14,7 +14,6 @@ Usage:
 """
 
 import argparse
-import base64
 import hashlib
 import html.parser
 import importlib
@@ -24,7 +23,6 @@ import os
 import random
 import re
 import shutil
-import subprocess
 import sys
 import tempfile
 import uuid
@@ -820,45 +818,25 @@ DIAGRAM_DIR = 'diagrams'
 
 
 def _mermaid_render(source, mode, tmp_dir, idx):
+    """Render one diagram to SVG via render_diagrams.render_source (shared impl).
+
+    Writes the SVG into tmp_dir as diagram_NNN.svg and returns its text,
+    or None on failure (caller falls back to a code block).
+    """
     if mode == 'off':
         return None
-    svg = None
-    if mode == 'local':
-        svg = _mermaid_render_local(source, tmp_dir, idx)
-    if svg is None and mode in ('api', 'local'):
-        svg = _mermaid_render_api(source)
-    return svg
-
-
-def _mermaid_render_local(source, tmp_dir, idx):
-    mmd_file = os.path.join(tmp_dir, f'diagram_{idx:03d}.mmd')
-    svg_file = os.path.join(tmp_dir, f'diagram_{idx:03d}.svg')
     try:
-        with open(mmd_file, 'w', encoding='utf-8') as f:
-            f.write(source)
-        subprocess.run(
-            ['mmdc', '-i', mmd_file, '-o', svg_file, '-q'],
-            capture_output=True,
-            timeout=30,
-            check=True,
-        )
-        with open(svg_file, 'r', encoding='utf-8') as f:
-            return f.read()
-    except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
+        from render_diagrams import render_source
+    except ImportError:
         return None
 
-
-def _mermaid_render_api(source):
-    try:
-        import urllib.request
-
-        encoded = base64.urlsafe_b64encode(source.encode('utf-8')).decode('ascii')
-        url = f'https://mermaid.ink/svg/{encoded}'
-        req = urllib.request.Request(url, headers={'User-Agent': 'learn-something/1.0'})
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            return resp.read().decode('utf-8')
-    except (urllib.error.URLError, OSError, ValueError):
+    data = render_source(source, mode=mode, fmt='svg')
+    if data is None:
         return None
+    svg_path = os.path.join(tmp_dir, f'diagram_{idx:03d}.svg')
+    with open(svg_path, 'wb') as f:
+        f.write(data)
+    return data.decode('utf-8', errors='replace')
 
 
 def _process_mermaid_blocks(html, mode, tmp_dir):

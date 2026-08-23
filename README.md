@@ -4,6 +4,14 @@ Structured learning framework for any subject — study via CLI with spaced repe
 
 Full spec: creation protocol, pedagogy, session types, subject schema, quality rules → `SKILL.md`. Learner session quick-reference → `study-protocol.md`.
 
+## Prerequisites
+
+- Python 3.8+ (stdlib only; `pip install pyyaml` recommended for quizzes)
+- Node.js + **mermaid-cli** for mermaid diagram validation (hard requirement, no fallback):
+  ```
+  npm install -g @mermaid-js/mermaid-cli
+  ```
+
 ## Quick Start
 
 1. **Trigger creation**: Say `I want to learn [topic]` or `learn.sh init <subject>`

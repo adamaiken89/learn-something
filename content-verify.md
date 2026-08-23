@@ -36,6 +36,6 @@ If same info appears through verbal AND visual channel simultaneously, mark viol
 
 - **Quality rules (17) + canonical shapes**: `learn.sh validate <topic>` — full gate (schema + syntax + quality; rule 15 mindmap ERR, rule 16 size + rule 17 H1 title WARN-only). Rule table lives in `SKILL.md` Part A4; shapes + conventions in Part B.
 - **YAML gotchas** (unquoted `@`, `": "` in scalars, `{...}` escapes, `questions:` wrapper): see `SKILL.md` Part B4.
-- **Markdown/mermaid syntax**: run within `learn.sh validate <topic>` (basic fallback if `pymarkdownlnt`/`mmdc` absent).
+- **Mermaid syntax**: validated by **mmdc (mermaid-cli)** — hard prerequisite, no fallback. Install: `npm install -g @mermaid-js/mermaid-cli`. Runs in `checksyntax`, `enrich` (post-write guard), `mindmap` post-write, and `validate`. Automated-checks table: single source of truth is `SKILL.md` Part B5.
 
 If any item fails, rewrite affected section. Cite violated principle.

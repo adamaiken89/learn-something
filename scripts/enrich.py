@@ -212,12 +212,28 @@ def enrich_lesson(lesson_path, types=None, dry_run=False, render_mode='api'):
                 print('...')
             else:
                 print('(no changes)')
-            return
+            return True
 
         bak = _backup(lesson_path)
         lesson_path.write_text(original)
         print(f'  Backup: {bak}')
         print(f'  Written: {lesson_path}')
+
+        # Post-write syntax guard: mmdc validation (fail-fast, no fallback).
+        ok = True
+        try:
+            import mermaidcheck
+
+            errs = mermaidcheck.validate_blocks_mmdc(original)
+            if errs:
+                ok = False
+                print('  ERROR: mermaid validation failed after enrichment:')
+                for idx, msg in errs:
+                    label = 'environment' if idx == 0 else f'mermaid block {idx}'
+                    print(f'    {label}: {msg}')
+                print(f'    Restore from backup if needed: {bak}')
+        except ImportError:
+            print('  WARN: mermaidcheck.py not available, skipping post-write guard')
 
         # Auto-render diagrams if 'diagram' type was enriched
         if 'diagram' in types and render_mode != 'off':
@@ -233,8 +249,11 @@ def enrich_lesson(lesson_path, types=None, dry_run=False, render_mode='api'):
                 print('  (render_diagrams.py not available, skipping PNG render)')
             except Exception as e:
                 print(f'  (diagram render error: {e})')
+
+        return ok
     elif dry_run:
         print('(no lesson.md changes)')
+    return True
 
 
 if __name__ == '__main__':

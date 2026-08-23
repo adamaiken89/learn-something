@@ -2,10 +2,11 @@
 
 Checks, per lesson:
   - markdown fence balance (unclosed ``` blocks)
-  - mermaid blocks via mermaidcheck.validate_mermaid
+  - mermaid blocks via mmdc (mermaid-cli — HARD prerequisite, no fallback;
+    see mermaidcheck.py) with safe_mode advisory warnings
   - code blocks via available interpreters (python3 -m py_compile,
     node --check, sh -n) with structural fallback
-  - optional mermaid render smoke test (--render api|local) reusing
+  - optional render smoke test (--render api|local) reusing
     render_diagrams.py
 
 Exit 0 = clean (or only warnings). Exit 1 = hard syntax errors found.
@@ -93,6 +94,9 @@ def check_lesson(text, render_mode='off', lesson_path=None):
     if len(fence_lines) % 2 != 0:
         hard.append(f'unbalanced code fences ({len(fence_lines)} fence lines)')
 
+    # Resolve mmdc once (hard prerequisite for mermaid blocks)
+    mmdc_cmd, _ = mermaidcheck.resolve_mmdc()
+
     # ── per-block scan ──
     blocks = text.split('```')
     # blocks[0] = prose before first fence; then alternating code/prose
@@ -104,13 +108,17 @@ def check_lesson(text, render_mode='off', lesson_path=None):
         block_no = (i + 1) // 2
 
         if label.strip().lower().startswith('mermaid'):
-            for bidx, msg in mermaidcheck.validate_mermaid(f'```mermaid\n{code}```'):
+            for msg in mermaidcheck.validate_block_mmdc(code, cmd=mmdc_cmd):
                 hard.append(f'mermaid block {block_no}: {msg}')
         else:
             errs, ws = _check_code_block(label, code)
             for e in errs:
                 hard.append(f'code block {block_no} ({label.strip() or "?"}): {e}')
             warns.extend(ws)
+
+    # ── safe-mode advisory lint (warnings only) ──
+    for bidx, _ln, msg in mermaidcheck.safe_mode_errors(text):
+        warns.append(f'mermaid block {bidx}: {msg} (advisory)')
 
     # ── optional render smoke test ──
     if render_mode != 'off' and lesson_path:

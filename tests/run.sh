@@ -17,6 +17,20 @@ echo "========================================="
 echo " Learn Something — Test Suite"
 echo "========================================="
 
+# --- Lint (ruff) — gate before tests ---
+echo ""
+echo "--- Lint (ruff) ---"
+if command -v ruff >/dev/null 2>&1; then
+    if ruff check --output-format=concise "$SKILL_DIR/scripts" "$SKILL_DIR/tests"; then
+        echo "Lint: PASS"
+    else
+        echo "Lint: FAIL"
+        FAILED=1
+    fi
+else
+    echo "Lint: SKIP (ruff not installed — pip install ruff)"
+fi
+
 # --- Python unit tests ---
 echo ""
 echo "--- Python unit tests (test_epub.py) ---"

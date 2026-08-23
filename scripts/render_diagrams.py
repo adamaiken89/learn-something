@@ -13,8 +13,10 @@ Or standalone:
 """
 
 import base64
+import os
 import subprocess
 import sys
+import tempfile
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -37,52 +39,74 @@ def _mmdc_available():
         return False
 
 
-def _render_local(source, out_path, scale=2):
-    """Render mermaid source to PNG via mmdc CLI.
+# ---------------------------------------------------------------------------
+# Shared low-level renderers (used here and by epub.py)
 
-    Args:
-        source: Mermaid diagram source text
-        out_path: Path for output PNG
-        scale: Scale factor (2 = 300dpi for e-ink)
 
-    Returns:
-        True on success, False on failure
-    """
-    tmp_mmd = out_path.with_suffix('.mmd.tmp')
+def _render_local_bytes(source, scale=2, fmt='png'):
+    """Render mermaid source via the global mmdc CLI. Returns file bytes or None."""
+    mmd_path = png_path = None
     try:
-        tmp_mmd.write_text(source, encoding='utf-8')
+        fd, raw = tempfile.mkstemp(suffix='.mmd')
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+            f.write(source)
+        mmd_path = Path(raw)
+        png_path = mmd_path.with_suffix(f'.{fmt}')
         subprocess.run(
-            ['mmdc', '-i', str(tmp_mmd), '-o', str(out_path), '-s', str(scale), '-q'],
+            ['mmdc', '-i', str(mmd_path), '-o', str(png_path), '-s', str(scale), '-q'],
             capture_output=True,
             timeout=30,
             check=True,
         )
-        return out_path.exists()
+        return png_path.read_bytes() if png_path.exists() else None
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
-        return False
+        return None
     finally:
-        if tmp_mmd.exists():
-            tmp_mmd.unlink()
+        for p in (mmd_path, png_path):
+            if p is not None and p.exists():
+                p.unlink()
 
 
-def _render_api(source, scale=2):
-    """Render mermaid source to PNG via mermaid.ink API.
-
-    Args:
-        source: Mermaid diagram source text
-        scale: Scale factor
-
-    Returns:
-        PNG bytes on success, None on failure
-    """
+def _render_api_bytes(source, scale=2, fmt='png'):
+    """Render mermaid source via mermaid.ink API. Returns bytes or None."""
     try:
         encoded = base64.urlsafe_b64encode(source.encode('utf-8')).decode('ascii')
-        url = f'https://mermaid.ink/png/{encoded}?scale={scale}'
+        url = f'https://mermaid.ink/{fmt}/{encoded}?scale={scale}'
         req = urllib.request.Request(url, headers={'User-Agent': 'learn-something/1.0'})
         with urllib.request.urlopen(req, timeout=15) as resp:
             return resp.read()
     except (urllib.error.URLError, OSError, ValueError):
         return None
+
+
+def render_source(source, mode='api', scale=2, fmt='png'):
+    """Render one mermaid source to bytes via local mmdc or mermaid.ink API.
+
+    Shared entry point (lesson PNGs + EPUB/PDF SVGs).
+    mode='local' tries mmdc first, falling back to the API on failure.
+    Returns bytes or None.
+    """
+    if mode == 'local':
+        data = _render_local_bytes(source, scale=scale, fmt=fmt)
+        if data is not None:
+            return data
+    if mode in ('api', 'local'):
+        return _render_api_bytes(source, scale=scale, fmt=fmt)
+    return None
+
+
+def _render_local(source, out_path, scale=2):
+    """Render mermaid source to a PNG file via mmdc CLI. True on success."""
+    data = _render_local_bytes(source, scale=scale, fmt='png')
+    if data is not None:
+        Path(out_path).write_bytes(data)
+        return True
+    return False
+
+
+def _render_api(source, scale=2):
+    """Render mermaid source to PNG bytes via mermaid.ink API."""
+    return _render_api_bytes(source, scale=scale, fmt='png')
 
 
 def _find_mermaid_blocks(text):

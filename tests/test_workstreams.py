@@ -169,8 +169,40 @@ def test_balance_correct_intact_and_idempotent():
 
 # ── mermaidcheck.py ───────────────────────────────────────────────
 
+GOOD_FLOWCHART_MD = '''```mermaid
+flowchart LR
+    A["Start"] --> B["End"]
+```
+'''
+
+BROKEN_FLOWCHART_MD = '''```mermaid
+flowchart LR
+    subgraph SG["T"]
+      A --> B
+```
+'''
+
+
+def test_mmdc_fail_fast_when_unavailable():
+    """No mmdc + offline → hard environment error, never a silent pass."""
+    orig = mermaidcheck._check_mmdc
+    try:
+        mermaidcheck._check_mmdc = lambda: False
+        errs = mermaidcheck.validate_blocks_mmdc(GOOD_FLOWCHART_MD, offline=True)
+        assert errs == [(0, mermaidcheck.MMDC_INSTALL_HINT)], errs
+        # No blocks → no error (nothing to validate)
+        assert mermaidcheck.validate_blocks_mmdc('no diagrams here', offline=True) == []
+    finally:
+        mermaidcheck._check_mmdc = orig
+    print('  mmdc_fail_fast_when_unavailable: OK')
+
 
 def test_sequence_alt_end_not_subgraph_error():
+    """Regression: alt/else/end in sequenceDiagram must validate clean via mmdc."""
+    cmd = mermaidcheck.resolve_mmdc(offline=True)[0]
+    if cmd is None:
+        print('  sequence_alt_end_clean: SKIP (no global mmdc)')
+        return
     content = '''```mermaid
 sequenceDiagram
     A->>B: hi
@@ -180,19 +212,104 @@ sequenceDiagram
         B-->>A: nope
     end
 ```'''
-    assert mermaidcheck.validate_mermaid(content) == [], mermaidcheck.validate_mermaid(content)
+    assert mermaidcheck.validate_blocks_mmdc(content, cmd=cmd) == [], (
+        mermaidcheck.validate_blocks_mmdc(content, cmd=cmd)
+    )
     print('  sequence_alt_end_clean: OK')
 
 
-def test_flowchart_missing_end_flagged():
-    content = '''```mermaid
-flowchart LR
-    subgraph SG["T"]
-      A --> B
-```'''
-    errs = mermaidcheck.validate_mermaid(content)
-    assert errs, 'missing end should be flagged'
+def test_flowchart_missing_end_flagged_by_mmdc():
+    """Real parser catches unclosed subgraph."""
+    cmd = mermaidcheck.resolve_mmdc(offline=True)[0]
+    if cmd is None:
+        print('  flowchart_missing_end_flagged: SKIP (no global mmdc)')
+        return
+    errs = mermaidcheck.validate_blocks_mmdc(BROKEN_FLOWCHART_MD, cmd=cmd)
+    assert errs and all(idx == 1 for idx, _ in errs), errs
     print('  flowchart_missing_end_flagged: OK')
+
+
+def test_checksyntax_mermaid_fail_fast():
+    """checksyntax surfaces the install hint as a hard error when mmdc absent."""
+    import checksyntax
+
+    orig = checksyntax.mermaidcheck.resolve_mmdc
+    try:
+        checksyntax.mermaidcheck.resolve_mmdc = lambda offline=False: (None, False)
+        hard, warns = checksyntax.check_lesson(GOOD_FLOWCHART_MD)
+        assert any(mermaidcheck.MMDC_INSTALL_HINT in h for h in hard), (hard, warns)
+    finally:
+        checksyntax.mermaidcheck.resolve_mmdc = orig
+    print('  checksyntax_mermaid_fail_fast: OK')
+
+
+def test_checksyntax_valid_diagram_clean_with_mmdc():
+    import checksyntax
+
+    cmd = checksyntax.mermaidcheck.resolve_mmdc(offline=True)[0]
+    if cmd is None:
+        print('  checksyntax_valid_diagram_clean: SKIP (no global mmdc)')
+        return
+    orig = checksyntax.mermaidcheck.resolve_mmdc
+    try:
+        checksyntax.mermaidcheck.resolve_mmdc = lambda offline=False: (cmd, False)
+        hard, warns = checksyntax.check_lesson(GOOD_FLOWCHART_MD)
+        assert not [h for h in hard if 'mermaid' in h], (hard, warns)
+    finally:
+        checksyntax.mermaidcheck.resolve_mmdc = orig
+    print('  checksyntax_valid_diagram_clean: OK')
+
+
+# ── enrich.py post-write guard ────────────────────────────────────
+
+
+def test_enrich_postwrite_guard_blocks_bad_mermaid():
+    """LLM output with broken mermaid → enrich_lesson returns False, backup kept."""
+    import enrich
+
+    cmd = mermaidcheck.resolve_mmdc(offline=True)[0]
+    if cmd is None:
+        print('  enrich_postwrite_guard_blocks_bad_mermaid: SKIP (no global mmdc)')
+        return
+    with tempfile.TemporaryDirectory() as td:
+        lp = Path(td) / 'lesson.md'
+        lp.write_text('# Lesson\n\ntext\n', encoding='utf-8')
+        orig_llm = enrich._call_llm
+        orig_res = mermaidcheck.resolve_mmdc
+        try:
+            enrich._call_llm = lambda prompt, system: BROKEN_FLOWCHART_MD
+            mermaidcheck.resolve_mmdc = lambda offline=False: (cmd, False)
+            ok = enrich.enrich_lesson(str(lp), types=['cloze'], render_mode='off')
+            assert ok is False, 'broken diagram must fail the guard'
+            assert 'subgraph' in lp.read_text(encoding='utf-8'), 'output not written'
+            assert list(Path(td).glob('lesson.md.bak*')), 'backup missing'
+        finally:
+            enrich._call_llm = orig_llm
+            mermaidcheck.resolve_mmdc = orig_res
+    print('  enrich_postwrite_guard_blocks_bad_mermaid: OK')
+
+
+def test_enrich_postwrite_guard_passes_good_mermaid():
+    import enrich
+
+    cmd = mermaidcheck.resolve_mmdc(offline=True)[0]
+    if cmd is None:
+        print('  enrich_postwrite_guard_passes_good_mermaid: SKIP (no global mmdc)')
+        return
+    with tempfile.TemporaryDirectory() as td:
+        lp = Path(td) / 'lesson.md'
+        lp.write_text('# Lesson\n\ntext\n', encoding='utf-8')
+        orig_llm = enrich._call_llm
+        orig_res = mermaidcheck.resolve_mmdc
+        try:
+            enrich._call_llm = lambda prompt, system: GOOD_FLOWCHART_MD
+            mermaidcheck.resolve_mmdc = lambda offline=False: (cmd, False)
+            ok = enrich.enrich_lesson(str(lp), types=['cloze'], render_mode='off')
+            assert ok is True
+        finally:
+            enrich._call_llm = orig_llm
+            mermaidcheck.resolve_mmdc = orig_res
+    print('  enrich_postwrite_guard_passes_good_mermaid: OK')
 
 
 BAD_MERMAID = '''```mermaid

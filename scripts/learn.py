@@ -2004,33 +2004,17 @@ def _check_pymarkdownlnt():
         return False
 
 
-def _check_mmdc():
-    """Check if mermaid CLI (mmdc) is available."""
-    try:
-        result = subprocess.run(
-            ['mmdc', '--version'],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        return result.returncode == 0
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        return False
-
-
 # ── Linter resolution chains ────────────────────────────────────
 #
-# Ground truth is the real linter; naive basic checkers are last resort
-# and known to produce false positives (e.g. sequenceDiagram alt/end read
-# as subgraph/end mismatch, globs in code spans read as unclosed italics).
+# Ground truth is the real linter/tool; no naive fallbacks for mermaid.
 #
 # Resolution order:
 #   markdown: global `pymarkdown` → `uvx --from pymarkdownlnt pymarkdown`
 #             → `pipx run --spec pymarkdownlnt pymarkdown` → basic
-#   mermaid:  global `mmdc` → `npx -y @mermaid-js/mermaid-cli` → basic
+#   mermaid:  global `mmdc` → `npx -y @mermaid-js/mermaid-cli` → HARD FAIL
 #
-# Network-backed fallbacks are skipped under offline/fast mode, so basic
-# false positives can only surface when explicitly opted out.
+# Network-backed fallbacks are skipped under offline/fast mode. Mermaid
+# validation is fail-fast: mmdc is a hard prerequisite (see mermaidcheck.py).
 
 
 def _resolve_md_linter(offline=False):
@@ -2050,15 +2034,10 @@ def _resolve_md_linter(offline=False):
 
 
 def _resolve_mmdc(offline=False):
-    """Return (argv_prefix or None, via_network).
+    """Deprecated shim → mermaidcheck.resolve_mmdc (same (argv, via_network))."""
+    import mermaidcheck
 
-    argv_prefix renders a diagram: <prefix> -i tmp.mmd -t neutral --quiet.
-    """
-    if _check_mmdc():
-        return ['mmdc'], False
-    if not offline and shutil.which('npx'):
-        return ['npx', '-y', '@mermaid-js/mermaid-cli'], True
-    return None, False
+    return mermaidcheck.resolve_mmdc(offline)
 
 
 def _validate_markdown_basic(filepath):
@@ -2162,32 +2141,24 @@ def _validate_markdown_basic(filepath):
     return errors
 
 
-def _validate_mermaid_basic(content):
-    """Basic mermaid syntax validation without external tools.
-    Returns list of (block_num, message) tuples."""
-    try:
-        import mermaidcheck
-    except ImportError:
-        return []
-    return mermaidcheck.validate_mermaid(content)
-
-
 def _content_syntax_errors(t, module=None, offline=False):
-    """Pass 2: markdown + mermaid syntax validation of lesson.md files."""
+    """Pass 2: markdown + mermaid syntax validation of lesson.md files.
+
+    Mermaid validation requires mmdc (hard prerequisite — no fallback).
+    """
     results = []
 
     md_cmd, md_net = _resolve_md_linter(offline)
-    mmdc_cmd, mmdc_net = _resolve_mmdc(offline)
+    import mermaidcheck
+
+    mmdc_cmd, mmdc_net = mermaidcheck.resolve_mmdc(offline)
 
     if md_cmd is None:
         print(f'{YELLOW}no markdown linter available — using basic checks (false positives possible){NC}')
         print(f'{YELLOW}Install: pip install pymarkdownlnt{NC}')
     elif md_net:
         print(f'{YELLOW}pymarkdownlnt not installed — using {"uvx" if md_cmd[0] == "uvx" else "pipx"} fallback (downloads on first use; --offline skips){NC}')
-    if mmdc_cmd is None:
-        print(f'{YELLOW}mmdc not installed — using basic mermaid checks (false positives possible){NC}')
-        print(f'{YELLOW}Install: npm install -g @mermaid-js/mermaid-cli{NC}')
-    elif mmdc_net:
+    if mmdc_net:
         print(f'{YELLOW}mmdc not installed — using npx fallback (cached after first use; --offline skips){NC}')
 
     if module:
@@ -2225,39 +2196,12 @@ def _content_syntax_errors(t, module=None, offline=False):
         else:
             md_errors = _validate_markdown_basic(lesson_path)
 
-        # Mermaid validation
+        # Mermaid validation (mmdc — hard prerequisite, no fallback)
         content = lesson_path.read_text()
-        if mmdc_cmd:
-            blocks = re.findall(r'```mermaid\s*\n(.*?)```', content, re.DOTALL)
-            for idx, block in enumerate(blocks, 1):
-                if not block.strip():
-                    mermaid_errors.append((idx, 'Empty mermaid block'))
-                    continue
-                import tempfile
-
-                with tempfile.NamedTemporaryFile(mode='w', suffix='.mmd', delete=False) as f:
-                    f.write(block)
-                    tmp_path = f.name
-                try:
-                    result = subprocess.run(
-                        [*mmdc_cmd, '-i', tmp_path, '-t', 'neutral', '--quiet'],
-                        capture_output=True,
-                        text=True,
-                        timeout=120 if len(mmdc_cmd) > 1 else 30,
-                    )
-                    if result.returncode != 0:
-                        err_msg = (
-                            result.stderr.strip().split('\n')[0]
-                            if result.stderr
-                            else 'invalid syntax'
-                        )
-                        mermaid_errors.append((idx, err_msg))
-                except subprocess.TimeoutExpired:
-                    mermaid_errors.append((idx, 'mmdc timed out'))
-                finally:
-                    os.unlink(tmp_path)
+        if mmdc_cmd is None:
+            mermaid_errors = [(0, mermaidcheck.MMDC_INSTALL_HINT)]
         else:
-            mermaid_errors = _validate_mermaid_basic(content)
+            mermaid_errors = mermaidcheck.validate_blocks_mmdc(content, cmd=mmdc_cmd)
 
         errors = [
             f'[markdown] line {ln}: {msg}' if ln else f'[markdown] {msg}' for ln, msg in md_errors
@@ -2311,13 +2255,22 @@ def cmd_enrich(
         print(f'{YELLOW}No modules found.{NC}')
         return
 
+    failed = []
     for m in mods:
         lesson_path = _module_path(topic, m) / 'lesson.md'
         if not lesson_path.exists():
             print(f'{YELLOW}No lesson.md in module {m}, skipping{NC}')
             continue
         print(f'{CYAN}Enriching: {topic}/{m}{NC}')
-        enrich_lesson(str(lesson_path), types=type_list, dry_run=dry_run, render_mode=render_mode)
+        ok = enrich_lesson(
+            str(lesson_path), types=type_list, dry_run=dry_run, render_mode=render_mode
+        )
+        if not ok:
+            failed.append(m)
+
+    if failed:
+        print(f'{RED}Enrichment failed syntax validation for: {", ".join(failed)}{NC}')
+        sys.exit(1)
 
 
 def cmd_blurting(topic: str, module: str):
@@ -2600,18 +2553,19 @@ def cmd_mindmap(topic: str, module: str):
     print(f'  Backup: {bak}')
     print(f'  Written: {lesson}')
 
-    # Auto-run basic mermaid check (generation-stage guard)
+    # Auto-run mmdc validation on the written mindmap (generation-stage guard)
     try:
         import mermaidcheck
 
-        errs = mermaidcheck.validate_mermaid(lesson.read_text())
+        errs = mermaidcheck.validate_blocks_mmdc(lesson.read_text())
         if errs:
-            print(f'{YELLOW}Mermaid warnings after write:{NC}')
+            print(f'{RED}Mermaid validation FAILED after write:{NC}')
             for idx, msg in errs:
-                print(f'  mermaid block {idx}: {msg}')
-            print(f'  Run: learn.py checksyntax {topic} {module} --render api')
+                label = 'environment' if idx == 0 else f'mermaid block {idx}'
+                print(f'  {label}: {msg}')
+            print(f'  Fix the diagram, then re-run: learn.sh mindmap {topic} {module}')
         else:
-            print(f'{GREEN}Mermaid check: OK{NC}')
+            print(f'{GREEN}mmdc check: OK{NC}')
     except ImportError:
         pass
 

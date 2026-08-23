@@ -18,14 +18,21 @@ learn-something/
 │   ├── learn.sh       # Thin bash wrapper → delegates to learn.py
 │   ├── learn.py       # Python CLI (FSRS, quiz engine, all commands)
 │   ├── sm2.py         # FSRS-5 algorithm (replaces SM-2)
+│   ├── quality.py     # Quality-gate checks (rules 1-17 + statistical) used by validate
 │   ├── enrich.py      # LLM-based lesson enrichment (cloze/predict/error/diagram/mindmap)
-│   ├── render_diagrams.py  # Mermaid → PNG renderer (mmdc CLI or mermaid.ink API)
+│   ├── render_diagrams.py  # Mermaid → PNG renderer (mmdc CLI or mermaid.ink API) + shared render_source()
 │   ├── migrate_courses.py  # Normalize legacy/invalid course YAML to canonical shapes (idempotent, --apply)
-│   ├── mermaidcheck.py # Shared basic mermaid syntax validator (learn.py validate + checksyntax)
-│   ├── checksyntax.py  # Generation-stage lesson.md lint: fences, mermaid, code blocks
+│   ├── mermaidcheck.py # Shared mmdc validator (fail-fast; NO regex fallback) + safe_mode advisory lint
+│   ├── checksyntax.py  # Generation-stage lesson.md lint: fences, mermaid (mmdc), code blocks
 │   ├── quizbalance.py  # Generation-stage quiz.yaml answer re-lettering (balanced sheets)
 │   ├── epub.py        # EPUB 3 generator (zero-dep + optional extras)
 │   └── pdf.py         # PDF generator (zero-dep + optional engines)
+└── tests/
+    ├── run.sh         # Test runner
+    ├── test_learn.py  # CLI tests
+    ├── test_fsrs.py   # FSRS algorithm tests
+    ├── test_epub.py   # EPUB generator tests
+    └── test_workstreams.py  # quizbalance / mermaidcheck / doctor-internals tests
 └── templates/
     ├── syllabus.yaml  # 20-module course skeleton
     ├── module.md      # Lesson structure (concrete-first, cloze/predict/error/diagram/mindmap)
@@ -101,7 +108,7 @@ Python CLI. Key subsystems:
 | `cmd_pdf_regen`        | Regenerate PDF from cached `book.md`. Flags: `--engine`, `--title`, `--author`                                                     |
 | `cmd_sync`             | Export deck to Reader directory (~/.coursereader/subjects/). Flag: `--reader-path`                                                 |
 | `cmd_sync_pull`        | Import deck from Reader directory. Flag: `--reader-path`                                                                           |
-| `cmd_validate`         | Full quality gate: Pass 1 `_schema_errors` (deck/quiz/cloze/cumulative/syllabus/feedback vs JSON Schema + module dir naming), Pass 2 `_content_syntax_errors` (markdown + mermaid), Pass 3-4 `_quality_checks` (rules 15-17 + statistical). Rule 15 (mindmap) ERR; rule 16 (size) and rule 17 (H1 title) WARN-only — threshold via `--max-chars N` (default 12,000), time budget is the real cap. Exit 1 on any ERR |
+| `cmd_validate`         | Full quality gate: Pass 1 `_schema_errors` (deck/quiz/cloze/cumulative/syllabus/feedback vs JSON Schema + module dir naming), Pass 2 `_content_syntax_errors` (markdown + mermaid via **mmdc — hard prerequisite, no fallback**), Pass 3-4 `_quality_checks` (rules 15-17 + statistical). Rule 15 (mindmap) ERR; rule 16 (size) and rule 17 (H1 title) WARN-only — threshold via `--max-chars N` (default 12,000), time budget is the real cap. Exit 1 on any ERR |
 | `cmd_render_diagrams`  | Render ```mermaid blocks in lesson.md to PNG. Flags: `--render-mode api                                                            | local`, `--scale N` |
 | `cmd_mindmap`          | Generate/regenerate Mermaid mindmap for a module via LLM (auto-runs basic mermaid check after write)                                                            |
 | `cmd_balance_quiz`     | Generation-stage: re-letter quiz.yaml answer positions to balanced no-3-run spread. Deterministic per topic-module (idempotent), backup `.bak`. Flags: none                                                             |
@@ -162,6 +169,9 @@ The 17 content quality rules are the single source of truth in `SKILL.md` → **
 ## Testing
 
 ```bash
+# Lint first (gate — runs automatically at the top of tests/run.sh)
+ruff check --output-format=concise scripts/ tests/
+
 # Create test directory
 mkdir test-course && cd test-course
 
