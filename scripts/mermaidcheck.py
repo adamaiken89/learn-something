@@ -100,6 +100,106 @@ def validate_mermaid(content):
     return errors
 
 
+# ---------------------------------------------------------------------------
+# Safe-mode lint (advisory): patterns that PARSE in some mermaid versions but
+# are known render-failure sources. Codified from a 32-diagram repair session.
+# These are warnings only — they never affect validate exit codes.
+
+CJK_RE = re.compile(r'[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]')
+
+RISKY_LABEL_RE = re.compile(r'[(){}|<>@]|-->')
+
+SHAPE_PREFIX_OK = re.compile(r'^\s*[\(\[\{>]')  # A[(db)], A{x}, A{{x}}, A>shape]
+
+
+def _mermaid_blocks(content):
+    """Yield (block_index, first_line_number, block_text) for ```mermaid blocks."""
+    for i, m in enumerate(re.finditer(r'```mermaid\s*\n(.*?)```', content, re.DOTALL), 1):
+        line_start = content.count('\n', 0, m.start(1)) + 1
+        yield i, line_start, m.group(1)
+
+
+def _label_issues(label):
+    """Human-readable reasons a node/edge label should be quoted."""
+    reasons = []
+    if RISKY_LABEL_RE.search(label):
+        reasons.append('risky chars (){}|<>@')
+    if CJK_RE.search(label):
+        reasons.append('CJK text')
+    return reasons
+
+
+def safe_mode_errors(content):
+    """Advisory lint: risky-but-parseable mermaid patterns.
+
+    Returns list of (block_idx, line_no, message).
+    """
+    issues = []
+    for idx, start_line, block in _mermaid_blocks(content):
+        for off, raw in enumerate(block.split('\n')):
+            ln = start_line + off
+            line = raw.rstrip()
+
+            # + chains: `A + B + C -->` is invalid syntax; use `&`
+            if re.match(r'^\s*\w+(\s*\+\s*\w+)+\s*-->', line):
+                issues.append((idx, ln, "node chain with '+' is invalid — use '&' (e.g. A & B & C --> X)"))
+                continue
+
+            # subgraph titles: unquoted title with parens/CJK/risky chars
+            sm = re.match(r'^\s*subgraph\s+(.*)$', line)
+            if sm:
+                rest = sm.group(1)
+                # strip optional id["title"] / id(title) quoted forms
+                bare = re.sub(r'\w+\s*\[.*\]\s*$', '', rest)
+                bare = re.sub(r'\w+\s*"[^"]*"\s*$', '', bare)
+                if bare and (RISKY_LABEL_RE.search(bare) or CJK_RE.search(bare)):
+                    issues.append(
+                        (idx, ln, 'quote subgraph title — subgraph id["Title here"]')
+                    )
+
+            # node labels: A[label] where label is unquoted and risky
+            for nm in re.finditer(r'\b[A-Za-z_]\w*\[([^\]]*)\]', line):
+                label = nm.group(1)
+                if SHAPE_PREFIX_OK.match(label) or label.startswith('"'):
+                    continue
+                if '"' in label:
+                    # nested quotes inside unquoted-ish label
+                    issues.append(
+                        (idx, ln, 'nested double quote in label — use #quot; entity')
+                    )
+                    continue
+                reasons = _label_issues(label)
+                if reasons:
+                    issues.append(
+                        (idx, ln, f'unquoted node label {label!r} ({", ".join(reasons)}) — quote it: X["{label}"]')
+                    )
+
+            # edge labels via pipes: -->|label|
+            for em in re.finditer(r'\|\s*([^|\n]*?)\s*\|', line):
+                label = em.group(1)
+                if label.startswith('"') and label.endswith('"') and len(label) >= 2:
+                    inner = label[1:-1]
+                    if '"' in inner:
+                        issues.append((idx, ln, 'nested double quote in edge label — use #quot;'))
+                elif '"' in label:
+                    issues.append((idx, ln, 'nested double quote in edge label — use #quot;'))
+                elif RISKY_LABEL_RE.search(label) or CJK_RE.search(label):
+                    issues.append(
+                        (idx, ln, f'unquoted edge label {label!r} — quote it: |"{label}"|')
+                    )
+
+            # edge labels via -- text --> form
+            for dm in re.finditer(r'--\s+(.+?)\s+-->', line):
+                label = dm.group(1)
+                if not (label.startswith('"') and label.endswith('"')) and (
+                    RISKY_LABEL_RE.search(label) or CJK_RE.search(label) or '"' in label
+                ):
+                    issues.append(
+                        (idx, ln, f'edge label {label!r} needs quoting or #quot;')
+                    )
+    return issues
+
+
 if __name__ == '__main__':
     import sys
 

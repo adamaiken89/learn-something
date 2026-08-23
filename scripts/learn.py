@@ -3102,6 +3102,46 @@ def cmd_doctor(topic: str):
     sys.exit(0)
 
 
+def cmd_lint_mermaid(topic: str, module: Optional[str] = None):
+    """Advisory mermaid safe-mode lint: risky-but-parseable patterns (quote labels etc.)."""
+    _check_topic(topic)
+    t = _topic_path(topic)
+    try:
+        import mermaidcheck
+    except ImportError:
+        sys.path.insert(0, str(Path(__file__).parent))
+        import mermaidcheck
+
+    if module:
+        paths = [_check_module(topic, module) / 'lesson.md']
+    else:
+        mroot = t / 'modules'
+        paths = sorted(mroot.glob('*/lesson.md')) if mroot.exists() else []
+
+    total = 0
+    for p in paths:
+        if not p.exists():
+            continue
+        issues = mermaidcheck.safe_mode_errors(p.read_text())
+        rel = p.relative_to(t)
+        if issues:
+            total += len(issues)
+            print(f'{YELLOW}{rel}: {len(issues)} finding(s){NC}')
+            for bidx, ln, msg in issues:
+                print(f'  - block {bidx} line {ln}: {msg}')
+        else:
+            print(f'{GREEN}{rel}: OK{NC}')
+
+    if total == 0:
+        print(f'\n{GREEN}Mermaid safe-mode: clean.{NC}')
+    else:
+        print(
+            f'\n{YELLOW}{total} advisory finding(s). These may render today but are known '
+            f'failure sources across mermaid versions — quote labels/subgraph titles.{NC}'
+        )
+    sys.exit(0)
+
+
 app.command('init')(cmd_init)
 app.command('start')(cmd_start)
 app.command('create-module')(cmd_create_module)
@@ -3141,6 +3181,7 @@ app.command('add-question')(cmd_add_question)
 app.command('balance-cumulative')(cmd_balance_cumulative)
 app.command('checksyntax')(cmd_checksyntax)
 app.command('doctor')(cmd_doctor)
+app.command('lint-mermaid')(cmd_lint_mermaid)
 
 
 def _reader_subjects_path(reader_path=None):
