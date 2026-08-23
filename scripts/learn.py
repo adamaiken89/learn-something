@@ -26,6 +26,7 @@ Usage:
 """
 
 import csv
+import io
 import json
 import os
 import random
@@ -1780,22 +1781,96 @@ def cmd_sync_pull(topic: str, reader_path: Optional[str] = None):
 
 
 def cmd_validate(
-    topic: str,
-    module: Optional[str] = None,
+    topic: Optional[str] = typer.Argument(None),
+    module: Optional[str] = typer.Argument(None),
     max_chars: Optional[int] = None,
     offline: bool = False,
     fast: bool = False,
+    all_topics: bool = typer.Option(False, '--all', '--all-topics', help='Validate every topic.'),
+    json_out: bool = typer.Option(False, '--json', help='JSON output.'),
 ):
-    """Full quality gate: schema + content syntax + quality checks. All checks ERR (rule 16 is WARN)."""
+    """Full quality gate: schema + content syntax + quality checks. All checks ERR (rule 16 is WARN).
+
+    With --all: validate every topic under the subjects directory.
+    With --json: machine-readable output.
+    """
+    if all_topics:
+        topics = sorted(
+            d.name for d in SUBJECTS_DIR.iterdir()
+            if d.is_dir() and (d / 'syllabus.yaml').exists()
+        )
+        if not topics:
+            print(f'{RED}No topics found in {SUBJECTS_DIR}{NC}')
+            sys.exit(1)
+        all_results = {}
+        any_errors = False
+        for tname in topics:
+            t = SUBJECTS_DIR / tname
+            try:
+                old = sys.stdout
+                if json_out:
+                    sys.stdout = io.StringIO()
+                try:
+                    results = (
+                        _schema_errors(t, yaml_available())
+                        + _content_syntax_errors(t, None, offline=offline or fast)
+                        + _quality_checks(t, None, max_chars or 12000)
+                    )
+                finally:
+                    if json_out:
+                        sys.stdout = old
+            except SystemExit:
+                raise
+            except Exception as e:
+                results = [('validate', [f'internal error: {e}'])]
+            files = {}
+            for name, errors in results:
+                files[name] = errors
+                if errors:
+                    any_errors = True
+            all_results[tname] = {'files': files, 'passed': all(not e for e in files.values())}
+        if json_out:
+            print(json.dumps({'results': all_results, 'all_passed': not any_errors}, indent=2))
+        else:
+            for tname, data in all_results.items():
+                if data['passed']:
+                    print(f'{GREEN}{tname}: OK{NC}')
+                    continue
+                n = sum(len(e) for e in data['files'].values())
+                print(f'{RED}{tname}: {n} error(s){NC}')
+                for name, errors in data['files'].items():
+                    if errors:
+                        print(f'  {name}:')
+                        for err in errors:
+                            print(f'    - {err}')
+            print(f"\n{'All topics passed.' if not any_errors else 'FAILURES PRESENT.'}")
+        sys.exit(1 if any_errors else 0)
+
+    if topic is None:
+        print(f'{RED}Provide TOPIC or use --all{NC}')
+        sys.exit(1)
     t = _topic_path(topic)
     if not t.exists():
         print(f'{RED}Subject not found: {topic}{NC}')
         sys.exit(1)
 
     results = []
-    results += _schema_errors(t, yaml_available())
-    results += _content_syntax_errors(t, module, offline=offline or fast)
-    results += _quality_checks(t, module, max_chars or 12000)
+    old = sys.stdout
+    if json_out:
+        sys.stdout = io.StringIO()
+    try:
+        results += _schema_errors(t, yaml_available())
+        results += _content_syntax_errors(t, module, offline=offline or fast)
+        results += _quality_checks(t, module, max_chars or 12000)
+    finally:
+        if json_out:
+            sys.stdout = old
+
+    if json_out:
+        files = {name: errors for name, errors in results}
+        passed = all(not errors for _, errors in results)
+        print(json.dumps({'topic': topic, 'files': files, 'passed': passed}, indent=2))
+        sys.exit(0 if passed else 1)
 
     # Report
     any_errors = False
@@ -2052,8 +2127,12 @@ def _validate_markdown_basic(filepath):
         double_stars = len(re.findall(r'(?<!\*)\*\*(?!\*)', line_prose))
         if double_stars % 2 != 0:
             errors.append((i, 'Unclosed ** (bold) marker'))
-        # Count unescaped * (not **, not ***)
-        single_stars = len(re.findall(r'(?<!\*)\*(?!\*)', line_prose)) - double_stars * 2
+        # Count emphasis-capable * only: CommonMark requires a non-space
+        # neighbor (opener `*x`, closer `x*`). A spaced star as in
+        # `select * from` is literal text, never emphasis.
+        single_stars = len(re.findall(r'\*(?=\S)|(?<=\S)\*', line_prose)) - double_stars * 2
+        if single_stars < 0:
+            single_stars = 0
         if single_stars % 2 != 0:
             # Could be valid if it's a list item marker, check context
             stripped = line.strip()
@@ -2876,6 +2955,153 @@ def cmd_checksyntax(
 
 app = typer.Typer(help='Learn Something — study with spaced repetition (FSRS).')
 
+def _fence_parity_errors(md_path: Path):
+    """Fence-parity walker: text-as-closer, unclosed fences, bare openers."""
+    errs = []
+    try:
+        lines = md_path.read_text(encoding='utf-8', errors='replace').splitlines()
+    except OSError as e:
+        return [f'read error: {e}']
+    infence = False
+    opener = None
+    for i, line in enumerate(lines, 1):
+        st = line.strip()
+        if not st.startswith('```'):
+            continue
+        if not infence:
+            infence = True
+            opener = i
+            if st == '```':
+                errs.append(f'line {i}: bare fence opener — no language tag')
+        else:
+            if st != '```':
+                errs.append(
+                    f'line {i}: text-as-closer `{st}` — fence opened at line {opener} never closed cleanly'
+                )
+            infence = False
+    if infence:
+        errs.append(f'unclosed fence from line {opener} to EOF')
+    return errs
+
+
+def _cloze_extract_errors(cloze_path: Path):
+    """Cloze answers must be extractable from {blank} markers in the question."""
+    if yaml is None:
+        return []
+    try:
+        data = yaml.safe_load(cloze_path.read_text())
+    except Exception as e:
+        return [f'parse error: {e}']
+    if not isinstance(data, list):
+        return ['not a top-level list']
+    errs = []
+    for q in data:
+        qid = q.get('id', '?')
+        question = str(q.get('question', ''))
+        answer = str(q.get('answer', '')).strip()
+        blanks = re.findall(r'\{([^}]{1,120})\}', question)
+        blank_blob = ' / '.join(blanks).lower()
+        parts = [p.strip().lower() for p in re.split(r'\s*/\s*', answer) if p.strip()]
+        if not blanks:
+            errs.append(f'{qid}: no {{blank}} marker in question')
+            continue
+        unmatched = [p for p in parts if p and p not in blank_blob]
+        if unmatched:
+            errs.append(f'{qid}: answer "{answer}" not extractable from blanks {blanks}')
+    return errs
+
+
+def _consistency_errors(t: Path):
+    """Cross-file consistency: H1↔slug↔numbering, quiz id prefixes, dirs⊆syllabus."""
+    errs = []
+    # syllabus module ids vs directories
+    syllabus_ids = []
+    syl = t / 'syllabus.yaml'
+    if yaml is not None and syl.exists():
+        try:
+            data = yaml.safe_load(syl.read_text()) or {}
+            syllabus_ids = [int(m.get('id')) for m in data.get('modules', []) if m.get('id') is not None]
+        except Exception:
+            pass
+    mod_dirs = sorted(d for d in (t / 'modules').glob('*-*') if d.is_dir()) if (t / 'modules').exists() else []
+    dir_nums = {}
+    for d in mod_dirs:
+        m = re.match(r'^(\d+)-', d.name)
+        if m:
+            dir_nums[int(m.group(1))] = d.name
+        else:
+            errs.append(f'modules/{d.name}: directory name not NN-kebab-case')
+    if syllabus_ids:
+        extra = set(dir_nums) - set(syllabus_ids)
+        missing = set(syllabus_ids) - set(dir_nums)
+        for n in sorted(extra):
+            errs.append(f'directory modules/{dir_nums[n]} has no syllabus module id {n}')
+        for n in sorted(missing):
+            errs.append(f'syllabus module id {n} has no modules/NN- directory')
+    # per-module checks
+    for num, dirname in sorted(dir_nums.items()):
+        lesson = t / 'modules' / dirname / 'lesson.md'
+        quiz = t / 'modules' / dirname / 'quiz.yaml'
+        cloze = t / 'modules' / dirname / 'cloze.yaml'
+        if lesson.exists():
+            content = lesson.read_text(errors='replace')
+            h1 = re.search(r'(?m)^#\s*Module\s+(\d+)\s*:', content)
+            if not h1:
+                errs.append(f'modules/{dirname}/lesson.md: H1 missing "# Module NN:" form')
+            elif int(h1.group(1)) != num:
+                errs.append(
+                    f'modules/{dirname}/lesson.md: H1 says Module {h1.group(1)} but directory number is {num}'
+                )
+        if yaml is not None and quiz.exists():
+            try:
+                qs = yaml.safe_load(quiz.read_text())
+                if isinstance(qs, list):
+                    for q in qs:
+                        qid = str(q.get('id', ''))
+                        m = re.match(r'^(\d+)\.', qid)
+                        if m and int(m.group(1)) != num:
+                            errs.append(
+                                f'modules/{dirname}/quiz.yaml: id "{qid}" prefix does not match module number {num}'
+                            )
+                        elif '.' not in qid:
+                            errs.append(f'modules/{dirname}/quiz.yaml: id "{qid}" not N.M form')
+            except Exception as e:
+                errs.append(f'modules/{dirname}/quiz.yaml: parse error {e}')
+        if yaml is not None and cloze.exists():
+            for e in _cloze_extract_errors(cloze):
+                errs.append(f'modules/{dirname}/cloze.yaml: {e}')
+    return errs
+
+
+def cmd_doctor(topic: str):
+    """Structural health check: fence parity + cross-file consistency (beyond validate)."""
+    _check_topic(topic)
+    t = _topic_path(topic)
+    results = []
+    md_files = sorted(p for p in t.rglob('*.md') if 'srs' not in p.relative_to(t).parts)
+    for md in md_files:
+        rel = md.relative_to(t)
+        errs = _fence_parity_errors(md)
+        results.append((f'{rel}', errs))
+    cons = _consistency_errors(t)
+    if cons:
+        results.append(('_consistency', cons))
+    any_errs = False
+    for name, errors in results:
+        if errors:
+            any_errs = True
+            print(f'{RED}{name}: {len(errors)} finding(s){NC}')
+            for err in errors:
+                print(f'  - {err}')
+        else:
+            print(f'{GREEN}{name}: OK{NC}')
+    if not any_errs:
+        print(f'\n{GREEN}Doctor: no structural issues found.{NC}')
+    else:
+        print(f'\n{YELLOW}Doctor findings above are advisory — run validate for the quality gate.{NC}')
+    sys.exit(0)
+
+
 app.command('init')(cmd_init)
 app.command('start')(cmd_start)
 app.command('create-module')(cmd_create_module)
@@ -2914,6 +3140,7 @@ app.command('gen-cumulative')(cmd_gen_cumulative)
 app.command('add-question')(cmd_add_question)
 app.command('balance-cumulative')(cmd_balance_cumulative)
 app.command('checksyntax')(cmd_checksyntax)
+app.command('doctor')(cmd_doctor)
 
 
 def _reader_subjects_path(reader_path=None):
