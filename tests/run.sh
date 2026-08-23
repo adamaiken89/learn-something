@@ -36,6 +36,15 @@ else
     FAILED=1
 fi
 
+echo ""
+echo "--- Workstream golden fixtures (test_workstreams.py) ---"
+if python3 "$SKILL_DIR/tests/test_workstreams.py"; then
+    echo "Workstream tests: PASS"
+else
+    echo "Workstream tests: FAIL"
+    FAILED=1
+fi
+
 # --- Bash integration tests ---
 echo ""
 echo "--- Bash integration tests (test_epub.sh) ---"
