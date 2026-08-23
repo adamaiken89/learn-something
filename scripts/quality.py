@@ -112,9 +112,15 @@ def quality_checks(t, module=None, max_chars=12000):
                     ok13 = any(ln.strip() for ln in sect_non_fence.split('\n'))
             if not ok13:
                 errs.append('quality: no Spot the Mistake exercise — rule 13')
-            # Rule 9: dual coding — mermaid diagram present (WARN, not ERR)
-            if not re.search(r'```mermaid', content):
-                print(f'{YELLOW}  WARN: no mermaid diagram — rule 9 (dual coding){NC}')
+            # Rule 9: dual coding — visual asset present (WARN).
+            # Per §A4.1: mermaid block or markdown table counts.
+            has_visual = bool(re.search(r'```mermaid', content)) or bool(
+                re.search(r'^\|.+\|\s*\n\|[\s\-:|]+\|', content, re.MULTILINE)
+            )
+            if not has_visual:
+                print(
+                    f'{YELLOW}  WARN: no visual asset (mermaid/table/comic) — rule 9 (dual coding){NC}'
+                )
             if errs:
                 results.append((f'{m}/lesson.md', errs))
 

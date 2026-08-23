@@ -39,7 +39,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-import sm2 as _sm2
+import fsrs as _fsrs
 import typer
 
 try:
@@ -76,9 +76,11 @@ CYAN = cval(C.CYAN)
 BOLD = cval(C.BOLD)
 NC = cval(C.NC)
 
-# ── SRS Algorithm ──────────────────────────────────────────────
+# ── SRS Algorithm (FSRS-6) ─────────────────────────────────────
 
-sm2_update = _sm2.update
+fsrs_update = _fsrs.update
+# Soft-deprecated alias — FSRS-5 callers. Remove in next major.
+sm2_update = _fsrs.update
 
 
 # ── Topic helpers ───────────────────────────────────────────────
@@ -673,7 +675,7 @@ def cmd_quiz(topic: str, module: str, adaptive: bool = False, weak_only: bool = 
         existing = cards.get(card_id) or _find_card(cards, qid, topic, module)
 
         if existing:
-            sm2_update(existing, quality)
+            fsrs_update(existing, quality)
         else:
             answer_opt = q.get('answer', 'a')
             card = {
@@ -692,7 +694,7 @@ def cmd_quiz(topic: str, module: str, adaptive: bool = False, weak_only: bool = 
                 'lastReviewed': None,
                 'isStarred': False,
             }
-            sm2_update(card, quality)
+            fsrs_update(card, quality)
             cards[card_id] = card
 
     deck['cards'] = cards
@@ -813,7 +815,7 @@ def cmd_cloze(topic: str, module: str, adaptive: bool = False, weak_only: bool =
         existing = cards.get(card_id) or _find_card(cards, qid, topic, module)
 
         if existing:
-            sm2_update(existing, quality)
+            fsrs_update(existing, quality)
         else:
             card = {
                 'id': card_id,
@@ -831,7 +833,7 @@ def cmd_cloze(topic: str, module: str, adaptive: bool = False, weak_only: bool =
                 'lastReviewed': None,
                 'isStarred': False,
             }
-            sm2_update(card, quality)
+            fsrs_update(card, quality)
             cards[card_id] = card
 
     deck['cards'] = cards
@@ -989,7 +991,7 @@ def cmd_cumulative_quiz(topic: str, modules: Optional[str] = None):
 
         # Update SRS
         if card_id in cards:
-            cards[card_id] = _sm2.sm2_update(cards[card_id], quality)
+            cards[card_id] = _fsrs.update(cards[card_id], quality)
 
         shown += 1
         print()
@@ -1103,7 +1105,7 @@ def cmd_review(topic: str):
             print(f'  {explanation}')
         print()
 
-        sm2_update(card, quality)
+        fsrs_update(card, quality)
 
     deck['cards'] = cards
     _save_deck(topic, deck)
@@ -2392,7 +2394,7 @@ def cmd_fsrs_predict(topic: str):
         print(f'{YELLOW}No deck yet. Take a quiz first.{NC}')
         return
 
-    from sm2 import predict_retention
+    from fsrs import predict_retention
 
     today = datetime.now()
     total = len(cards)

@@ -21,7 +21,7 @@ learn-something/
 ├── scripts/
 │   ├── learn.sh       # Thin bash wrapper → delegates to learn.py
 │   ├── learn.py       # Python CLI (FSRS, quiz engine, all commands)
-│   ├── sm2.py         # FSRS-5 algorithm (replaces SM-2)
+│   ├── fsrs.py         # FSRS-6 algorithm (replaces FSRS-5/SM-2)
 │   ├── quality.py     # Quality-gate checks (rules 1-17 + statistical) used by validate
 │   ├── enrich.py      # LLM-based lesson enrichment (cloze/predict/error/diagram/mindmap)
 │   ├── render_diagrams.py  # Mermaid → PNG renderer (mmdc CLI or mermaid.ink API) + shared render_source()
@@ -83,7 +83,7 @@ Python CLI. Key subsystems:
 
 | Function               | Purpose                                                                                                                            |
 | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `sm2_update()`         | FSRS-5 algorithm: stability, difficulty, lapses, state                                                                             |
+| `fsrs_update()`         | FSRS-6 algorithm: stability, difficulty, lapses, state, algorithm_version, desired_retention, learning_step. 4-level rating (1-4). States: New/Learning/Review/Relearning. |
 | `cmd_init`             | Create subject directory, copy syllabus template. Flags: `--depth survey                                                           | standard            | deep`, `--pretest` |
 | `cmd_start`            | Show subject overview + module list                                                                                                |
 | `cmd_create_module`    | Create module from template. Flag: `--name`. module_id must match NN-name (e.g., 01-intro)                                           |
@@ -118,21 +118,23 @@ Python CLI. Key subsystems:
 | `cmd_balance_quiz`     | Generation-stage: re-letter quiz.yaml answer positions to balanced no-3-run spread. Deterministic per topic-module (idempotent), backup `.bak`. Flags: none                                                             |
 | `cmd_checksyntax`      | Generation-stage: lint a module's lesson.md — fence balance, mermaid blocks (shared `mermaidcheck.py`), code blocks via interpreters (python3 py_compile / node --check / bash -n). Flag: `--render api | local | off` (smoke render)                                                                  |
 
-#### FSRS-5 Algorithm (`sm2_update()`)
+#### FSRS-6 Algorithm (`fsrs_update()`)
 
-- Replaces SM-2. Uses 21-parameter model from py-fsrs v6.
-- Quality >= 4 (correct) → rating=Good(3). Quality < 3 (wrong) → rating=Again(1). Quality=3 → rating=Hard(2).
-- Initial stability S0 = W[rating-1], difficulty D0 = W[4] - exp(W[5] * (rating - 1)) + 1
+- Replaces FSRS-5. Uses 19-parameter model from py-fsrs v6.
+- Quality mapping: 0-2→Again(1), 3→Hard(2), 4-5→Good(3); explicit `rating` arg (1-4) takes precedence.
+- Initial stability S0 = W[rating-1], difficulty D0 = W[4] - exp(W[5] * (rating - 3)) + 1
 - Retrievability: R = (1 + FACTOR * t / S) ^ DECAY
 - Short-term (elapsed < 1d) vs long-term (elapsed >= 1d) stability updates
-- Old SM-2 cards auto-migrate via `_migrate_sm2_card()` on update
-- See `sm2.py` for full parameter constants W[0..20]
+- Per-card `desired_retention` (default 0.9) drives interval via `t = S/factor * (r^(1/decay) - 1)`
+- States: New → Learning (Again/Hard) → Review → Relearning (lapse) → Review
+- Old SM-2 and FSRS-5 cards auto-migrate via `_migrate_card()` (lazy, on first update)
+- See `fsrs.py` for full parameter constants W[0..18] and DECAY = -W[17]
 
 #### Quiz Engine (`cmd_quiz`)
 
 - Uses Python3 with `yaml` library.
 - Options shuffled per question, keys remapped (A-D → a-d).
-- Each quiz attempt updates SRS deck with FSRS-5 intervals.
+- Each quiz attempt updates SRS deck with FSRS-6 intervals.
 - Falls back to raw display if `yaml` unavailable.
 - Adaptive mode: weighted by ease, difficulty ramp, streak skip.
 
@@ -153,7 +155,7 @@ The 17 content quality rules are the single source of truth in `SKILL.md` → **
 1. **Keep pedagogy alignment**: Any new feature must fit Marva Collins (rigor/repetition), Feynman (explain-simply), or Desirable Difficulties (spacing/interleaving). Tag new features with which theory they serve.
 2. **Keep cost model**: Powered by DeepSeek V4 Flash. Content creation stays ~$0.10/course max. Study sessions stay $0.
 3. **Keep time budgets**: Every module ≤ 1.5h (hard cap, all levels; depth via more modules + open questions). Subject ≤ 40h guideline (deep courses may exceed; schema allows 200h).
-4. **Keep FSRS-5 correct**: Stability/difficulty formulas match py-fsrs v6. Do not change W parameters without testing against known FSRS implementations.
+4. **Keep FSRS-6 correct**: Stability/difficulty formulas match py-fsrs v6. 19 params, 4-level rating, `DECAY = -W[17]`. Do not change W parameters without testing against known FSRS implementations.
 5. **Keep trigger behavior**: On trigger, enter content creation mode immediately — never generate full course in one shot unless user explicitly asks.
 6. **Keep template constraints**: MCQ = exactly 4 options, 1 correct. Module must include Feynman + Reframe sections.
 7. **Keep sync**: Changes to study protocol in SKILL.md must be mirrored in `study-protocol.md`. Changes to deck schema must sync between CLI and Reader.

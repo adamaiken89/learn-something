@@ -20,7 +20,7 @@ Learner-facing quick reference. Full pedagogy + schema contract in `SKILL.md` (P
 4. For deeper probing: open opencode chat, explain concept to AI. AI finds gaps.
 
 ### REVIEW (10-15 min, daily) — Desirable Difficulties
-1. `learn.sh <topic> review` → due cards FSRS-5
+1. `learn.sh <topic> review` → due cards FSRS-6
 2. Cards mixed from multiple modules (interleaved)
 3. Correct → interval grows. Wrong → reset 1d.
 4. `learn.sh <topic> stats` → retention, weak areas
@@ -36,7 +36,7 @@ Learner-facing quick reference. Full pedagogy + schema contract in `SKILL.md` (P
 - LEARN 25 min (one new module)
 - EXPLAIN 5 min (Feynman check on new module)
 
-## Spaced Repetition (FSRS-5)
+## Spaced Repetition (FSRS-6)
 
 Each MCQ = 1 SRS card.
 

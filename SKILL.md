@@ -3,7 +3,7 @@ name: learn-something
 description: >
     Structured learning framework for any subject from text. Create syllabus +
     lessons + MCQ quizzes interactively with LLM. Study via CLI with spaced
-    repetition (FSRS-5). Three-theory pedagogy: Marva Collins' Way (repetition,
+    repetition (FSRS-6). Three-theory pedagogy: Marva Collins' Way (repetition,
     reframing, high expectations), Feynman Technique (explain-simply, find gaps),
     Desirable Difficulties (spaced/MCQ/retrieval). Cost-effective: content
     creation ~$0.10 per course; per-session cost = $0.
@@ -61,7 +61,7 @@ Three theories fused:
 3. **Per module** (10 min): Create module with `learn.sh create-module <topic> NN-name`. Zero-padded two-digit number + kebab-case name (e.g., `01-intro`, `02-core-concepts`). **lesson.md H1 title is human-readable only**: `# Module NN: <name>` using the syllabus module `name` (e.g. `# Module 09: Layout & Container Composition`). Zero-padded `NN`, colon, human title. Never embed the directory slug (`NN-name`) in the H1 — the slug is the folder's name, not the title. Write lesson.md + quiz.yaml + cloze.yaml. Apply Part A rules inline. Respect the module time budget (`syllabus.yaml` `time_hours` ≤ 1.5h — the hard cap); if a lesson overflows its budget, split into additional modules and update syllabus. Lesson.md length is a soft guide only (WARN, never blocking; threshold user-settable via `validate --max-chars`). **quiz.yaml**: LLM writes option content + the correct option *by content* (letters as placeholders); run `learn.sh balance-quiz <topic> <module>` to re-letter answers into a balanced, no-3-run spread (deterministic per topic-module, backup `.bak`). **lesson.md**: run `learn.sh checksyntax <topic> <module> [--render api|local]` — lint mermaid blocks, code blocks (python/js/shell when interpreters present), and fence balance before continuing. User reviews. Proceed.
 4. **Validate**: Run `learn.sh validate <topic> [module]`. Fix all ERR + WARN before proceeding. Quality gate is blocking (all checks ERR). `balance-quiz` + `checksyntax` are the generation-stage, per-module guards; `validate` stays the final gate.
 5. **Pre-publication**: Load `content-verify.md`. Run checklist. Fix violations.
-6. **Compile SRS** (2 min): Extract MCQs → FSRS-5 deck.
+6. **Compile SRS** (2 min): Extract MCQs → FSRS-6 deck.
 7. **Cumulative quizzes**: After every 3-4 modules (max span 4 — enforced by `validate`), generate `cumulative_quiz_XX-YY.yaml` in subject root (zero-padded module range, e.g. `cumulative_quiz_01-04.yaml`). See B2 for exact shape. Filename must carry the covered module range `XX-YY`; single-file `cumulative_quiz.yaml` is rejected.
 
 ## A4. Content principles + quality rules
@@ -93,7 +93,7 @@ All 17 below have an automated check in the quality gate (see B5). `Mindmap` (15
 | 6 | "How likely" | Tell normal vs rare frequencies | WARN |
 | 7 | Common misconceptions | Flag 1-2 specific errors beginners hold | WARN |
 | 8 | Socratic throughout | Every concept section embeds **Think** question + immediate answer | WARN: `> **Think**:` blockquote in non-fence content |
-| 9 | Dual coding | Every concept gets non-redundant diagram (Mermaid, ascii, hierarchy). Mermaid palette: `#5c7a99`/`#5c8a6a`/`#b8924a`/`#b86a4a`/`#7a5a8a`/`#888`, strokes `#333`, theme `neutral` | WARN: ```mermaid blocks |
+| 9 | Dual coding | Every concept gets non-redundant diagram. **Use the visual asset decision tree (§A4.1) to pick between Mermaid and markdown table.** Mermaid palette: `#5c7a99`/`#5c8a6a`/`#b8924a`/`#b86a4a`/`#7a5a8a`/`#888`, strokes `#333`, theme `neutral` | WARN: visual asset count ≥ 1 per concept section |
 | 10 | Concrete-first | Start module with real-world example before abstract definition | WARN |
 | 11 | Cloze deletions | 3-5 per module. Key terms blanked as `{term}`. Format: `{blank}` marks the term to fill in. Good cloze = conceptual context, not trivial blanking | WARN: `{...}` in non-fence content |
 | 12 | Predict-next | 2-3 per module. Learner commits to outcome before reveal | WARN: `> **Predict**:` blockquote |
@@ -102,6 +102,38 @@ All 17 below have an automated check in the quality gate (see B5). `Mindmap` (15
 | 15 | Module mindmap | **Compulsory.** Mermaid mindmap at top of lesson.md (after metadata, before Learning Objectives). ` ```mermaid\nmindmap\n  root((Module Title))`, max 3 levels deep | ERR: mindmap present |
 | 16 | Module size limit | Time budget is the hard cap (`time_hours` ≤1.5h); split if a lesson overflows it. Char count = soft guide (default 12,000; user sets own limit via `validate --max-chars N`). Exceeding it warns, never blocks | WARN: char count > max_chars |
 | 17 | Human-readable title | lesson.md H1 = `# Module NN: <syllabus name>` — zero-padded `NN`, colon, human title only. The directory slug (`NN-name`) never appears in the H1; the slug is the folder's name, not the title | WARN: H1 missing, or module id is not a plain number (`# Module NN-slug: ...` fails) |
+
+#### A4.1 Visual asset decision tree — when to use what
+
+A lesson can carry 3 kinds of visual asset. Each fits a different purpose. **Pick the one that matches the content**, not the other way around.
+
+| Asset | Best for | Avoid when |
+|---|---|---|
+| **Markdown table** | Categorical data, comparisons, lists with multiple attributes per row, anything that benefits from a columnar layout. Stays in the markdown — no extra render step. | You need to show process, flow, or relationship. |
+| **Mermaid diagram** | Flow / process / sequence, hierarchies, cause-effect chains, state machines, anything with arrows and nodes. Renders server-side or via `learn.sh render-diagrams`. | Static classification (use table). |
+
+##### Decision flow
+
+```
+Is the content primarily:
+│
+├─ Categorical (rows × columns)           → Markdown table
+│
+└─ Process / flow / sequence / hierarchy  → Mermaid
+```
+
+##### Rules of thumb
+
+- **One asset per concept section.** Don't stack the same idea in table + Mermaid. Pick the strongest.
+- **Mermaid** is the workhorse: use it whenever a flow or tree beats prose.
+- **Markdown table** wins for any list where the reader scans by attribute (Name / Definition / Example / Risk).
+- **Mixing OK when assets do different jobs**: e.g. Mermaid for the 50/30/20 split + a table for the per-line breakdown. They reinforce, not duplicate.
+- **CJK safety**: Mermaid labels must be quoted (`|"label"|`) when they contain CJK + ASCII mix, or contain `(` `)` etc. Unquoted labels trigger `checksyntax` WARN.
+
+##### Anti-patterns to reject during review
+
+- ASCII `┌─┐ │ └─┘` boxes inside ` ```text ` blocks that simply list categories — convert to a markdown table.
+- Mermaid `flowchart` of a 2-3 item list — use a table instead.
 
 ## A5. Study protocol
 
@@ -117,9 +149,9 @@ All 17 below have an automated check in the quality gate (see B5). `Mindmap` (15
 
 ### FSRS rules
 
-- Uses FSRS-5 algorithm (replaces SM-2). Cards tracked by: stability, difficulty, lapses, state.
+- Uses FSRS-6 algorithm (replaces FSRS-5 and SM-2). Cards tracked by: stability, difficulty, lapses, state, algorithm_version, desired_retention, learning_step.
 - Correct (q≥4): stability grows with recall. Wrong (q<3): stability drops, difficulty rises.
-- See `sm2.py` for full FSRS parameter set.
+- See `fsrs.py` for full FSRS parameter set.
 - `learn.sh fsrs-predict <topic>` shows avg stability/difficulty/retention per topic.
 - Old SM-2 decks auto-migrate on first review after upgrade.
 
@@ -261,7 +293,7 @@ Machine-readable contract. Every artifact validates against `learn-something-sch
 │   │   └── cloze.yaml        # 8-10 cloze questions
 │   └── ...
 └── srs/
-    ├── deck.json             # FSRS-5 cards {cards: {id: card}}
+    ├── deck.json             # FSRS-6 cards {cards: {id: card}}
     └── stats.json            # History
 ```
 

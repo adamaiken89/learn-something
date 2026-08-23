@@ -1,6 +1,6 @@
 # Learn Something
 
-Structured learning framework for any subject — study via CLI with spaced repetition (FSRS-5). Three-theory pedagogy: Marva Collins, Feynman Technique, Desirable Difficulties.
+Structured learning framework for any subject — study via CLI with spaced repetition (FSRS-6). Three-theory pedagogy: Marva Collins, Feynman Technique, Desirable Difficulties.
 
 Full spec: creation protocol, pedagogy, session types, subject schema, quality rules → `SKILL.md`. Learner session quick-reference → `study-protocol.md`.
 
@@ -32,7 +32,7 @@ learn.sh quiz <subject> <mod>    MCQ drill
 learn.sh cloze <subject> <mod>   Fill-in-blank drill
 learn.sh explain <subject> <mod> Feynman technique prompt
 learn.sh feynman <subject> <mod> Alias for explain
-learn.sh review <subject>        FSRS-5 spaced repetition
+learn.sh review <subject>        FSRS-6 spaced repetition
 learn.sh stats <subject>         Progress + retention
 learn.sh export <subject>        Anki CSV export
 learn.sh epub <subject> [file]   Export course to EPUB book

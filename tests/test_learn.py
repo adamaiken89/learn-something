@@ -4,6 +4,7 @@
 import contextlib
 import io
 import json
+import re
 import sys
 import tempfile
 from datetime import datetime, timedelta
@@ -1519,6 +1520,14 @@ try:
 except ImportError:
     _has_typer_test = False
 
+_ANSI_RE = re.compile(r'\x1b\[[0-9;]*[A-Za-z]')
+
+
+def _help_plain(result):
+    """Help text with ANSI stripped — typer/click may render via rich with
+    per-character color codes that split flags like '--adaptive'."""
+    return _ANSI_RE.sub('', result.output)
+
 
 def test_cli_help_shows_all_commands():
     if not _has_typer_test:
@@ -1566,7 +1575,7 @@ def test_cli_quiz_help():
         f'quiz --help exit={result.exit_code} output={result.output!r} '
         f'exception={result.exception!r}'
     )
-    assert '--adaptive' in result.output, f'quiz help output: {result.output!r}'
+    assert '--adaptive' in _help_plain(result), f'quiz help output: {result.output!r}'
 
 
 def test_cli_feynman_alias():
@@ -1586,7 +1595,7 @@ def test_cli_validate_help():
         f'validate --help exit={result.exit_code} output={result.output!r} '
         f'exception={result.exception!r}'
     )
-    assert '--max-chars' in result.output, f'validate help output: {result.output!r}'
+    assert '--max-chars' in _help_plain(result), f'validate help output: {result.output!r}'
 
 
 if __name__ == '__main__':
