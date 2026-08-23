@@ -25,11 +25,12 @@ jobs:
       - name: Install Chromium deps (mmdc/puppeteer needs these to launch)
         run: |
           sudo apt-get update
+          # t64-suffixed names = Ubuntu 24.04 (noble) time_t transition renames
           sudo apt-get install -y --no-install-recommends \
-            libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
+            libnss3 libatk1.0-0t64 libatk-bridge2.0-0t64 libcups2t64 libdrm2 \
             libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
-            libgbm1 libasound2 libpangocairo-1.0-0 libpango-1.0-0 libcairo2 \
-            libx11-xcb1 libxcursor1 libgtk-3-0
+            libgbm1 libasound2t64 libpangocairo-1.0-0 libpango-1.0-0 libcairo2 \
+            libx11-xcb1
       - name: Lint
         run: ruff check --output-format=github scripts/ tests/
       - name: Format check
