@@ -54,7 +54,7 @@ description: >
 
 Contains Part A (instruction) + Part B (schema contract): Pedagogy, Content Structure, Content Creation Protocol, Study Protocol, CLI, Cost Model, Integration, Trigger Behavior, Quality Rules, Schema Reference.
 
-- **Part A3/A4 (Content Creation Protocol)**: defines LLM behavior during course creation. Modify if changing AI creation flow. Includes 16 content quality rules now: concrete-first, cloze, predict, error-spotting, dual coding, mindmap, module size cap, etc.
+- **Part A3/A4 (Content Creation Protocol)**: defines LLM behavior during course creation. Modify if changing AI creation flow. Includes 17 content quality rules now: concrete-first, cloze, predict, error-spotting, dual coding, mindmap, module size cap, human-readable title, etc.
 - **Part A5 (Study Protocol)**: defines session types and FSRS rules. Mirror changes into `study-protocol.md`.
 - **Part A6 (Trigger Behavior)**: defines first-response behavior. Modify if changing entry flow.
 
@@ -101,7 +101,7 @@ Python CLI. Key subsystems:
 | `cmd_pdf_regen`        | Regenerate PDF from cached `book.md`. Flags: `--engine`, `--title`, `--author`                                                     |
 | `cmd_sync`             | Export deck to Reader directory (~/.coursereader/subjects/). Flag: `--reader-path`                                                 |
 | `cmd_sync_pull`        | Import deck from Reader directory. Flag: `--reader-path`                                                                           |
-| `cmd_validate`         | Full quality gate: Pass 1 `_schema_errors` (deck/quiz/cloze/cumulative/syllabus/feedback vs JSON Schema + module dir naming), Pass 2 `_content_syntax_errors` (markdown + mermaid), Pass 3-4 `_quality_checks` (rules 15-16 + statistical). Rule 15 (mindmap) ERR; rule 16 (size) WARN-only — threshold via `--max-chars N` (default 12,000), time budget is the real cap. Exit 1 on any ERR |
+| `cmd_validate`         | Full quality gate: Pass 1 `_schema_errors` (deck/quiz/cloze/cumulative/syllabus/feedback vs JSON Schema + module dir naming), Pass 2 `_content_syntax_errors` (markdown + mermaid), Pass 3-4 `_quality_checks` (rules 15-17 + statistical). Rule 15 (mindmap) ERR; rule 16 (size) and rule 17 (H1 title) WARN-only — threshold via `--max-chars N` (default 12,000), time budget is the real cap. Exit 1 on any ERR |
 | `cmd_render_diagrams`  | Render ```mermaid blocks in lesson.md to PNG. Flags: `--render-mode api                                                            | local`, `--scale N` |
 | `cmd_mindmap`          | Generate/regenerate Mermaid mindmap for a module via LLM (auto-runs basic mermaid check after write)                                                            |
 | `cmd_balance_quiz`     | Generation-stage: re-letter quiz.yaml answer positions to balanced no-3-run spread. Deterministic per topic-module (idempotent), backup `.bak`. Flags: none                                                             |
@@ -135,7 +135,7 @@ Python CLI. Key subsystems:
 
 ## Content Quality Rules
 
-The 16 content quality rules are the single source of truth in `SKILL.md` → **Part A4** (with automated checks). Do NOT duplicate the rule table here — if rules change, edit SKILL.md only.
+The 17 content quality rules are the single source of truth in `SKILL.md` → **Part A4** (with automated checks). Do NOT duplicate the rule table here — if rules change, edit SKILL.md only.
 
 ## Modification Rules
 

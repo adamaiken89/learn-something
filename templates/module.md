@@ -1,4 +1,4 @@
-# Module N: [Title]
+# Module N: [Title]   <!-- Human-readable only. N = plain number, no directory slug (rule 17). Title = syllabus module name, e.g. `# Module 09: Layout & Container Composition`. -->
 
 Est. study time: [X]h
 Language: [en/zh/yue]

@@ -34,7 +34,7 @@ If same info appears through verbal AND visual channel simultaneously, mark viol
 
 ## Automated checks
 
-- **Quality rules (16) + canonical shapes**: `learn.sh validate <topic>` — full gate (schema + syntax + quality; rule 15 mindmap ERR, rule 16 size WARN-only). Rule table lives in `SKILL.md` Part A4; shapes + conventions in Part B.
+- **Quality rules (17) + canonical shapes**: `learn.sh validate <topic>` — full gate (schema + syntax + quality; rule 15 mindmap ERR, rule 16 size + rule 17 H1 title WARN-only). Rule table lives in `SKILL.md` Part A4; shapes + conventions in Part B.
 - **YAML gotchas** (unquoted `@`, `": "` in scalars, `{...}` escapes, `questions:` wrapper): see `SKILL.md` Part B4.
 - **Markdown/mermaid syntax**: run within `learn.sh validate <topic>` (basic fallback if `pymarkdownlnt`/`mmdc` absent).
 

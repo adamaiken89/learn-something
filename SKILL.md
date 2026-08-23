@@ -58,7 +58,7 @@ Three theories fused:
 
 1. **Scope** (5 min): Ask domain/level/time budget/lang/use case. Propose syllabus.
 2. **Outline stage**: Verify module DAG + prerequisite chain. Check time budget.
-3. **Per module** (10 min): Create module with `learn.sh create-module <topic> NN-name`. Zero-padded two-digit number + kebab-case name (e.g., `01-intro`, `02-core-concepts`). Write lesson.md + quiz.yaml + cloze.yaml. Apply Part A rules inline. Respect the module time budget (`syllabus.yaml` `time_hours` ≤ 1.5h — the hard cap); if a lesson overflows its budget, split into additional modules and update syllabus. Lesson.md length is a soft guide only (WARN, never blocking; threshold user-settable via `validate --max-chars`). **quiz.yaml**: LLM writes option content + the correct option *by content* (letters as placeholders); run `learn.sh balance-quiz <topic> <module>` to re-letter answers into a balanced, no-3-run spread (deterministic per topic-module, backup `.bak`). **lesson.md**: run `learn.sh checksyntax <topic> <module> [--render api|local]` — lint mermaid blocks, code blocks (python/js/shell when interpreters present), and fence balance before continuing. User reviews. Proceed.
+3. **Per module** (10 min): Create module with `learn.sh create-module <topic> NN-name`. Zero-padded two-digit number + kebab-case name (e.g., `01-intro`, `02-core-concepts`). **lesson.md H1 title is human-readable only**: `# Module NN: <name>` using the syllabus module `name` (e.g. `# Module 09: Layout & Container Composition`). Zero-padded `NN`, colon, human title. Never embed the directory slug (`NN-name`) in the H1 — the slug is the folder's name, not the title. Write lesson.md + quiz.yaml + cloze.yaml. Apply Part A rules inline. Respect the module time budget (`syllabus.yaml` `time_hours` ≤ 1.5h — the hard cap); if a lesson overflows its budget, split into additional modules and update syllabus. Lesson.md length is a soft guide only (WARN, never blocking; threshold user-settable via `validate --max-chars`). **quiz.yaml**: LLM writes option content + the correct option *by content* (letters as placeholders); run `learn.sh balance-quiz <topic> <module>` to re-letter answers into a balanced, no-3-run spread (deterministic per topic-module, backup `.bak`). **lesson.md**: run `learn.sh checksyntax <topic> <module> [--render api|local]` — lint mermaid blocks, code blocks (python/js/shell when interpreters present), and fence balance before continuing. User reviews. Proceed.
 4. **Validate**: Run `learn.sh validate <topic> [module]`. Fix all ERR + WARN before proceeding. Quality gate is blocking (all checks ERR). `balance-quiz` + `checksyntax` are the generation-stage, per-module guards; `validate` stays the final gate.
 5. **Pre-publication**: Load `content-verify.md`. Run checklist. Fix violations.
 6. **Compile SRS** (2 min): Extract MCQs → FSRS-5 deck.
@@ -81,7 +81,7 @@ Three theories fused:
 
 ### Quality rules (16) — enforced by `learn.sh validate`
 
-All 16 below have an automated check in the quality gate (see B5). `Mindmap` (15) is ERR; the rest are WARN — including `Module size` (16), which is advisory only because the real size control is the module time budget.
+All 17 below have an automated check in the quality gate (see B5). `Mindmap` (15) is ERR; the rest are WARN — including `Module size` (16), which is advisory only because the real size control is the module time budget, and `Human-readable title` (17), which catches the H1 slug leak.
 
 | # | Rule | What to do | Automated check |
 |---|---|---|---|
@@ -101,6 +101,7 @@ All 16 below have an automated check in the quality gate (see B5). `Mindmap` (15
 | 14 | Graduated examples | Full worked → partial → independent | WARN |
 | 15 | Module mindmap | **Compulsory.** Mermaid mindmap at top of lesson.md (after metadata, before Learning Objectives). ` ```mermaid\nmindmap\n  root((Module Title))`, max 3 levels deep | ERR: mindmap present |
 | 16 | Module size limit | Time budget is the hard cap (`time_hours` ≤1.5h); split if a lesson overflows it. Char count = soft guide (default 12,000; user sets own limit via `validate --max-chars N`). Exceeding it warns, never blocks | WARN: char count > max_chars |
+| 17 | Human-readable title | lesson.md H1 = `# Module NN: <syllabus name>` — zero-padded `NN`, colon, human title only. The directory slug (`NN-name`) never appears in the H1; the slug is the folder's name, not the title | WARN: H1 missing, or module id is not a plain number (`# Module NN-slug: ...` fails) |
 
 ## A5. Study protocol
 
@@ -308,9 +309,9 @@ Auto-fix most of these + normalize shapes with `python3 scripts/migrate_courses.
 |---|---|---|
 | 1. Schema | quiz/cloze/cumulative/syllabus/deck/feedback vs JSON Schema; module dir naming; junk files | ERR |
 | 2. Content syntax | markdown (pymarkdownlnt or basic) + mermaid (mmdc or basic) on lesson.md | ERR |
-| 3. Quality | Rule 15 ERR: mindmap present. Rule 16 WARN only: lesson.md char count > `--max-chars` (default 12,000) — time budget (`time_hours` ≤1.5h) is the real size cap | ERR for 15; WARN for 16 |
+| 3. Quality | Rule 15 ERR: mindmap present. Rule 16 WARN only: lesson.md char count > `--max-chars` (default 12,000) — time budget (`time_hours` ≤1.5h) is the real size cap. Rule 17 WARN only: H1 must be `# Module NN: <name>` — plain number, no dir slug | ERR for 15; WARN for 16, 17 |
 | 4. Quality (statistical) | Rules 1-14 signals: Think/Cloze/Predict/Spot-the-Mistake blocks, mermaid diagrams, difficulty mix, answer rotation/spread, item counts, Q-per-LO, cumulative coverage + type mix | ERR |
 
-All checks are ERR — exit code 1 if any fails. No WARN tier, except rule 16 (lesson.md char count) which is WARN-only and never affects exit code. Schema sources: `learn-something-schema/` (JSON Schema files, TypeScript types, python validator). `validate-content` = deprecated alias for backward compatibility.
+All checks are ERR — exit code 1 if any fails. No WARN tier, except rule 16 (lesson.md char count) and rule 17 (H1 title slug) which are WARN-only and never affect exit code. Schema sources: `learn-something-schema/` (JSON Schema files, TypeScript types, python validator). `validate-content` = deprecated alias for backward compatibility.
 
 Generated decks may carry ISO date-times (Reader-rewritten) or date-only (CLI-written) — both accepted by schema.

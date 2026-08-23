@@ -2168,6 +2168,13 @@ def _quality_checks(t, module=None, max_chars=12000):
             # Primary size control is the module time budget (syllabus time_hours ≤ 1.5h).
             if len(content) > max_chars:
                 print(f'{YELLOW}  WARN: lesson.md {len(content)} chars > {max_chars} (--max-chars) — rule 16 (soft target, non-blocking)', file=sys.stderr)
+            # Rule 17: human-readable H1 — `# Module NN: <name>` with plain-number id.
+            # Slug leak (`# Module NN-name: ...`) = folder name copied into the title; WARN only.
+            h1 = re.search(r'(?m)^#\s*Module\s+([^:]+):', content)
+            if not h1:
+                print(f'{YELLOW}  WARN: no `# Module NN: <name>` H1 — rule 17 (human-readable title){NC}', file=sys.stderr)
+            elif not h1.group(1).strip().isdigit():
+                print(f'{YELLOW}  WARN: H1 module id "{h1.group(1).strip()}" is not a plain number — rule 17 (no directory slug in title){NC}', file=sys.stderr)
             # Fence-aware view: strip ``` code/mermaid blocks so content-block rules
             # only see prose/blockquotes (kills Mermaid node-brace false positives too)
             non_fence = re.sub(r'```[^\n]*\n.*?```', '', content, flags=re.DOTALL)
