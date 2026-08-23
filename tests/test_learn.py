@@ -1358,9 +1358,7 @@ def _strip_mindmap(base):
     """Remove the mindmap block from 01-intro lesson.md (breaks rule 15)."""
     lp = base / 'MCS' / 'modules' / '01-intro' / 'lesson.md'
     lesson = lp.read_text()
-    lesson = lesson.replace(
-        '```mermaid\nmindmap\n  root((Topic))\n    Idea\n```\n\n', ''
-    )
+    lesson = lesson.replace('```mermaid\nmindmap\n  root((Topic))\n    Idea\n```\n\n', '')
     lp.write_text(lesson)
 
 
@@ -1434,9 +1432,7 @@ def test_balance_quiz_balances_and_idempotent():
             counts = {L: answers.count(L) for L in 'abcd'}
             assert max(counts.values()) <= 3, f'unbalanced counts: {counts}'
             # backup exists
-            assert (
-                Path(str(base)) / 'MCS' / 'modules' / '01-intro' / 'quiz.yaml.bak'
-            ).exists()
+            assert (Path(str(base)) / 'MCS' / 'modules' / '01-intro' / 'quiz.yaml.bak').exists()
             # idempotent: second run changes nothing
             try:
                 learn.cmd_balance_quiz(topic='MCS', module='01-intro')
@@ -1580,9 +1576,7 @@ def test_cli_validate_help():
 if __name__ == '__main__':
     # Direct-run runner so tests/run.sh (`python3 tests/test_learn.py`)
     # actually executes tests — zero-dep, mirrors tests/test_epub.py.
-    tests = [
-        v for k, v in sorted(globals().items()) if k.startswith('test_') and callable(v)
-    ]
+    tests = [v for k, v in sorted(globals().items()) if k.startswith('test_') and callable(v)]
     failed = 0
     for test in tests:
         try:

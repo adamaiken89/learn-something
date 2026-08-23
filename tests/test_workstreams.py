@@ -66,7 +66,15 @@ def _cum_path(lo, hi):
 
 def test_cumulative_range_span():
     cuf = _cum_path(1, 6)
-    item = {'id': 'cum.1', 'type': 'tf', 'source_modules': [1], 'statement': 'x', 'answer': True, 'difficulty': 1, 'tags': []}
+    item = {
+        'id': 'cum.1',
+        'type': 'tf',
+        'source_modules': [1],
+        'statement': 'x',
+        'answer': True,
+        'difficulty': 1,
+        'tags': [],
+    }
     mods = ['01-a', '02-b', '03-c', '04-d', '05-e', '06-f']
     errs = quality.cumulative_quality_errors(cuf, mods, lambda p: [item])
     assert any('spans' in str(e) for e in errs), f'span>4 not caught: {errs}'
@@ -75,19 +83,31 @@ def test_cumulative_range_span():
 
 def test_cumulative_source_outside_range():
     cuf = _cum_path(1, 2)
-    item = {'id': 'cum.1', 'type': 'tf', 'source_modules': [9], 'statement': 'x', 'answer': True, 'difficulty': 1, 'tags': []}
+    item = {
+        'id': 'cum.1',
+        'type': 'tf',
+        'source_modules': [9],
+        'statement': 'x',
+        'answer': True,
+        'difficulty': 1,
+        'tags': [],
+    }
     mods = ['01-a', '02-b', '03-c']
     errs = quality.cumulative_quality_errors(cuf, mods, lambda p: [item])
-    assert any('source_modules' in str(e) for e in errs), (
-        f'out-of-range source not caught: {errs}'
-    )
+    assert any('source_modules' in str(e) for e in errs), f'out-of-range source not caught: {errs}'
     print('  cumulative_source_bad_flagged: OK')
 
 
 def _cum_item(i, typ='mcq', **kw):
     base = {'id': f'cum.{i}', 'type': typ, 'source_modules': [1], 'difficulty': 1, 'tags': []}
     if typ == 'mcq':
-        base.update({'question': f'q{i}?', 'options': {'a': 'A', 'b': 'B', 'c': 'C', 'd': 'D'}, 'answer': kw.get('ans', 'a')})
+        base.update(
+            {
+                'question': f'q{i}?',
+                'options': {'a': 'A', 'b': 'B', 'c': 'C', 'd': 'D'},
+                'answer': kw.get('ans', 'a'),
+            }
+        )
     elif typ == 'tf':
         base.update({'statement': f's{i}', 'answer': True})
     else:
@@ -124,9 +144,7 @@ def test_cumulative_type_mix():
     cuf = _cum_path(1, 1)
     items = [_cum_item(i, 'mcq') for i in range(1, 9)]
     errs = quality.cumulative_quality_errors(cuf, ['01-a'], lambda p: items)
-    assert any('type mix' in str(e) for e in errs), (
-        f'missing type mix not caught: {errs}'
-    )
+    assert any('type mix' in str(e) for e in errs), f'missing type mix not caught: {errs}'
     print('  cumulative_typemix_bad_flagged: OK')
 
 
@@ -134,11 +152,14 @@ def test_cumulative_type_mix():
 
 
 def test_balance_preserves_option_order():
-    qs = [{
-        'id': '1.1', 'question': 'Q?',
-        'options': {'a': 'right', 'b': 'w1', 'c': 'w2', 'd': 'w3'},
-        'answer': 'a',
-    }]
+    qs = [
+        {
+            'id': '1.1',
+            'question': 'Q?',
+            'options': {'a': 'right', 'b': 'w1', 'c': 'w2', 'd': 'w3'},
+            'answer': 'a',
+        }
+    ]
     new, stats = quizbalance.balance_quiz(qs, seed='order-seed')
     texts_after = list(new[0]['options'].values())
     orig = ['right', 'w1', 'w2', 'w3']
@@ -150,16 +171,45 @@ def test_balance_preserves_option_order():
 
 def test_balance_correct_intact_and_idempotent():
     qs = [
-        {'id': '1.1', 'question': 'Q1', 'options': {'a': 'r1', 'b': 'b1', 'c': 'c1', 'd': 'd1'}, 'answer': 'c'},
-        {'id': '1.2', 'question': 'Q2', 'options': {'a': 'a2', 'b': 'r2', 'c': 'c2', 'd': 'd2'}, 'answer': 'b'},
-        {'id': '1.3', 'question': 'Q3', 'options': {'a': 'a3', 'b': 'b3', 'c': 'r3', 'd': 'd3'}, 'answer': 'c'},
-        {'id': '1.4', 'question': 'Q4', 'options': {'a': 'a4', 'b': 'b4', 'c': 'c4', 'd': 'r4'}, 'answer': 'd'},
-        {'id': '1.5', 'question': 'Q5', 'options': {'a': 'a5', 'b': 'b5', 'c': 'c5', 'd': 'r5'}, 'answer': 'd'},
+        {
+            'id': '1.1',
+            'question': 'Q1',
+            'options': {'a': 'r1', 'b': 'b1', 'c': 'c1', 'd': 'd1'},
+            'answer': 'c',
+        },
+        {
+            'id': '1.2',
+            'question': 'Q2',
+            'options': {'a': 'a2', 'b': 'r2', 'c': 'c2', 'd': 'd2'},
+            'answer': 'b',
+        },
+        {
+            'id': '1.3',
+            'question': 'Q3',
+            'options': {'a': 'a3', 'b': 'b3', 'c': 'r3', 'd': 'd3'},
+            'answer': 'c',
+        },
+        {
+            'id': '1.4',
+            'question': 'Q4',
+            'options': {'a': 'a4', 'b': 'b4', 'c': 'c4', 'd': 'r4'},
+            'answer': 'd',
+        },
+        {
+            'id': '1.5',
+            'question': 'Q5',
+            'options': {'a': 'a5', 'b': 'b5', 'c': 'c5', 'd': 'r5'},
+            'answer': 'd',
+        },
         {'id': '1.6', 'question': 'Q6', 'answer': 'x'},  # no options — skipped
     ]
-    orig_correct = {q['id']: q['options'][q['answer']] for q in qs if isinstance(q.get('options'), dict)}
+    orig_correct = {
+        q['id']: q['options'][q['answer']] for q in qs if isinstance(q.get('options'), dict)
+    }
     new, stats = quizbalance.balance_quiz(qs, seed='idem-seed')
-    new_correct = {q['id']: q['options'][q['answer']] for q in new if isinstance(q.get('options'), dict)}
+    new_correct = {
+        q['id']: q['options'][q['answer']] for q in new if isinstance(q.get('options'), dict)
+    }
     assert new_correct == orig_correct, f'correct option text changed: {new_correct}'
     assert stats['skipped'] == 1
     new2, _ = quizbalance.balance_quiz(new, seed='idem-seed')
@@ -169,18 +219,18 @@ def test_balance_correct_intact_and_idempotent():
 
 # ── mermaidcheck.py ───────────────────────────────────────────────
 
-GOOD_FLOWCHART_MD = '''```mermaid
+GOOD_FLOWCHART_MD = """```mermaid
 flowchart LR
     A["Start"] --> B["End"]
 ```
-'''
+"""
 
-BROKEN_FLOWCHART_MD = '''```mermaid
+BROKEN_FLOWCHART_MD = """```mermaid
 flowchart LR
     subgraph SG["T"]
       A --> B
 ```
-'''
+"""
 
 
 def test_mmdc_fail_fast_when_unavailable():
@@ -203,7 +253,7 @@ def test_sequence_alt_end_not_subgraph_error():
     if cmd is None:
         print('  sequence_alt_end_clean: SKIP (no global mmdc)')
         return
-    content = '''```mermaid
+    content = """```mermaid
 sequenceDiagram
     A->>B: hi
     alt ok
@@ -211,7 +261,7 @@ sequenceDiagram
     else no
         B-->>A: nope
     end
-```'''
+```"""
     assert mermaidcheck.validate_blocks_mmdc(content, cmd=cmd) == [], (
         mermaidcheck.validate_blocks_mmdc(content, cmd=cmd)
     )
@@ -312,7 +362,7 @@ def test_enrich_postwrite_guard_passes_good_mermaid():
     print('  enrich_postwrite_guard_passes_good_mermaid: OK')
 
 
-BAD_MERMAID = '''```mermaid
+BAD_MERMAID = """```mermaid
 flowchart LR
     A[Calculate % Change<br/>|new - prev|] --> B
     C -->|Depth <= limit| D
@@ -330,7 +380,7 @@ flowchart LR
     subgraph S1["Quoted title"]
       C["fine"]
     end
-```'''
+```"""
 
 
 def test_safemode_flags_all_risky_classes():
@@ -339,7 +389,7 @@ def test_safemode_flags_all_risky_classes():
     for needle in (
         'unquoted node label',
         '|"Depth <= limit"|',
-        "Cost > quota",
+        'Cost > quota',
         "'&'",
         'subgraph id[',
         'CJK',
@@ -386,9 +436,27 @@ def test_cloze_answer_extractability():
         import yaml
 
         items = [
-            {'id': 'c.1', 'question': 'The {b-tree} governs lookups.', 'answer': 'b-tree', 'difficulty': 1, 'tags': []},
-            {'id': 'c.2', 'question': 'The {wal} flushes first.', 'answer': 'totally unrelated', 'difficulty': 1, 'tags': []},
-            {'id': 'c.3', 'question': 'No blanks here at all.', 'answer': 'x', 'difficulty': 1, 'tags': []},
+            {
+                'id': 'c.1',
+                'question': 'The {b-tree} governs lookups.',
+                'answer': 'b-tree',
+                'difficulty': 1,
+                'tags': [],
+            },
+            {
+                'id': 'c.2',
+                'question': 'The {wal} flushes first.',
+                'answer': 'totally unrelated',
+                'difficulty': 1,
+                'tags': [],
+            },
+            {
+                'id': 'c.3',
+                'question': 'No blanks here at all.',
+                'answer': 'x',
+                'difficulty': 1,
+                'tags': [],
+            },
         ]
         p.write_text(yaml.dump(items, allow_unicode=True))
         errs = learn._cloze_extract_errors(p)
@@ -400,9 +468,7 @@ def test_cloze_answer_extractability():
 
 
 if __name__ == '__main__':
-    tests = [
-        v for k, v in sorted(globals().items()) if k.startswith('test_') and callable(v)
-    ]
+    tests = [v for k, v in sorted(globals().items()) if k.startswith('test_') and callable(v)]
     failed = 0
     for test in tests:
         try:

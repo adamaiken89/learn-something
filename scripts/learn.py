@@ -1796,8 +1796,7 @@ def cmd_validate(
     """
     if all_topics:
         topics = sorted(
-            d.name for d in SUBJECTS_DIR.iterdir()
-            if d.is_dir() and (d / 'syllabus.yaml').exists()
+            d.name for d in SUBJECTS_DIR.iterdir() if d.is_dir() and (d / 'syllabus.yaml').exists()
         )
         if not topics:
             print(f'{RED}No topics found in {SUBJECTS_DIR}{NC}')
@@ -1843,7 +1842,7 @@ def cmd_validate(
                         print(f'  {name}:')
                         for err in errors:
                             print(f'    - {err}')
-            print(f"\n{'All topics passed.' if not any_errors else 'FAILURES PRESENT.'}")
+            print(f'\n{"All topics passed." if not any_errors else "FAILURES PRESENT."}')
         sys.exit(1 if any_errors else 0)
 
     if topic is None:
@@ -2154,12 +2153,18 @@ def _content_syntax_errors(t, module=None, offline=False):
     mmdc_cmd, mmdc_net = mermaidcheck.resolve_mmdc(offline)
 
     if md_cmd is None:
-        print(f'{YELLOW}no markdown linter available — using basic checks (false positives possible){NC}')
+        print(
+            f'{YELLOW}no markdown linter available — using basic checks (false positives possible){NC}'
+        )
         print(f'{YELLOW}Install: pip install pymarkdownlnt{NC}')
     elif md_net:
-        print(f'{YELLOW}pymarkdownlnt not installed — using {"uvx" if md_cmd[0] == "uvx" else "pipx"} fallback (downloads on first use; --offline skips){NC}')
+        print(
+            f'{YELLOW}pymarkdownlnt not installed — using {"uvx" if md_cmd[0] == "uvx" else "pipx"} fallback (downloads on first use; --offline skips){NC}'
+        )
     if mmdc_net:
-        print(f'{YELLOW}mmdc not installed — using npx fallback (cached after first use; --offline skips){NC}')
+        print(
+            f'{YELLOW}mmdc not installed — using npx fallback (cached after first use; --offline skips){NC}'
+        )
 
     if module:
         mods = [module]
@@ -2219,6 +2224,7 @@ def _quality_checks(t, module=None, max_chars=12000):
     except ImportError:
         return []
     return quality.quality_checks(t, module=module, max_chars=max_chars)
+
 
 def cmd_validate_content(topic: str, module: Optional[str] = None):
     """Deprecated alias → validate (full quality gate)."""
@@ -2603,8 +2609,7 @@ def cmd_balance_quiz(topic: str, module: str):
     bak = quiz_path.with_suffix('.yaml.bak')
     shutil.copy2(quiz_path, bak)
     quiz_path.write_text(
-        yaml.dump(new_qs, default_flow_style=False, sort_keys=False, allow_unicode=True)
-        + '\n'
+        yaml.dump(new_qs, default_flow_style=False, sort_keys=False, allow_unicode=True) + '\n'
     )
 
     print(f'{CYAN}Balanced quiz: {topic}/{module}{NC}')
@@ -2692,11 +2697,14 @@ def cmd_gen_cumulative(topic: str, rng: str, force: bool = False):
                     cloze_bank.append(c)
 
     if len(mcq_bank) < 3 or len(cloze_bank) < 2:
-        print(f'{RED}Banks too thin in modules {lo}-{hi}: {len(mcq_bank)} MCQs, {len(cloze_bank)} cloze. '
-              f'Need >=3 MCQs and >=2 cloze to build a valid file.{NC}')
+        print(
+            f'{RED}Banks too thin in modules {lo}-{hi}: {len(mcq_bank)} MCQs, {len(cloze_bank)} cloze. '
+            f'Need >=3 MCQs and >=2 cloze to build a valid file.{NC}'
+        )
         sys.exit(1)
 
     items, n = [], 0
+
     def take(bank, k):
         nonlocal n
         got = bank[:k]
@@ -2706,27 +2714,33 @@ def cmd_gen_cumulative(topic: str, rng: str, force: bool = False):
     # 4 MCQ + 3 cloze + 3 tf target (10 items), min floor enforced by quality gate
     for src in take(mcq_bank, 4):
         n += 1
-        items.append({
-            'id': f'cum.{n}', 'type': 'mcq',
-            'question': src.get('question', ''),
-            'source_modules': src['source_modules'],
-            'options': {k: str(v) for k, v in src['options'].items()},
-            'answer': str(src.get('answer', 'a')).lower(),
-            'explanation': src.get('explanation', ''),
-            'difficulty': int(src.get('difficulty', 2)),
-            'tags': ['cross-module'] + list(src.get('tags') or []),
-        })
+        items.append(
+            {
+                'id': f'cum.{n}',
+                'type': 'mcq',
+                'question': src.get('question', ''),
+                'source_modules': src['source_modules'],
+                'options': {k: str(v) for k, v in src['options'].items()},
+                'answer': str(src.get('answer', 'a')).lower(),
+                'explanation': src.get('explanation', ''),
+                'difficulty': int(src.get('difficulty', 2)),
+                'tags': ['cross-module'] + list(src.get('tags') or []),
+            }
+        )
     for src in take(cloze_bank, 3):
         n += 1
-        items.append({
-            'id': f'cum.{n}', 'type': 'cloze',
-            'question': src.get('question', ''),
-            'source_modules': src['source_modules'],
-            'answer': src.get('answer', ''),
-            'explanation': src.get('explanation', ''),
-            'difficulty': int(src.get('difficulty', 2)),
-            'tags': ['cross-module'] + list(src.get('tags') or []),
-        })
+        items.append(
+            {
+                'id': f'cum.{n}',
+                'type': 'cloze',
+                'question': src.get('question', ''),
+                'source_modules': src['source_modules'],
+                'answer': src.get('answer', ''),
+                'explanation': src.get('explanation', ''),
+                'difficulty': int(src.get('difficulty', 2)),
+                'tags': ['cross-module'] + list(src.get('tags') or []),
+            }
+        )
 
     # synthesize T/F statements from remaining cloze until we have >=3 tf
     tf_made = 0
@@ -2739,27 +2753,45 @@ def cmd_gen_cumulative(topic: str, rng: str, force: bool = False):
             wrong = re.sub(r'\{[^}]*\}', 'NOT-' + ans.split('/')[0].strip(), q, count=1)
             smod = src['source_modules']
             n += 1
-            items.append({'id': f'cum.{n}', 'type': 'tf', 'statement': true_stmt,
-                          'source_modules': smod, 'answer': True,
-                          'explanation': src.get('explanation', ''),
-                          'difficulty': int(src.get('difficulty', 2)),
-                          'tags': ['cross-module', 'recall']})
+            items.append(
+                {
+                    'id': f'cum.{n}',
+                    'type': 'tf',
+                    'statement': true_stmt,
+                    'source_modules': smod,
+                    'answer': True,
+                    'explanation': src.get('explanation', ''),
+                    'difficulty': int(src.get('difficulty', 2)),
+                    'tags': ['cross-module', 'recall'],
+                }
+            )
             n += 1
-            items.append({'id': f'cum.{n}', 'type': 'tf', 'statement': wrong,
-                          'source_modules': smod, 'answer': False,
-                          'explanation': f'The blanked term was {ans}.',
-                          'difficulty': int(src.get('difficulty', 2)),
-                          'tags': ['cross-module', 'misconception']})
+            items.append(
+                {
+                    'id': f'cum.{n}',
+                    'type': 'tf',
+                    'statement': wrong,
+                    'source_modules': smod,
+                    'answer': False,
+                    'explanation': f'The blanked term was {ans}.',
+                    'difficulty': int(src.get('difficulty', 2)),
+                    'tags': ['cross-module', 'misconception'],
+                }
+            )
             tf_made += 2
     if tf_made == 0:
-        print(f'{RED}Could not synthesize any true/false items (cloze questions lack {{blank}} markers).{NC}')
+        print(
+            f'{RED}Could not synthesize any true/false items (cloze questions lack {{blank}} markers).{NC}'
+        )
         sys.exit(1)
 
     # balance mcq answers deterministically
     seed = f'{topic}-cum-{rng}'
     new_items, stats = quizbalance.balance_quiz(items, seed)
 
-    text = yaml.dump(new_items, default_flow_style=False, sort_keys=False, allow_unicode=True) + '\n'
+    text = (
+        yaml.dump(new_items, default_flow_style=False, sort_keys=False, allow_unicode=True) + '\n'
+    )
     bak = out_path.with_suffix('.yaml.bak')
     if out_path.exists():
         shutil.copy2(out_path, bak)
@@ -2769,15 +2801,19 @@ def cmd_gen_cumulative(topic: str, rng: str, force: bool = False):
     # verify against the same quality rules validate uses
     try:
         import quality
+
         errs = quality.cumulative_quality_errors(
-            out_path, mods, lambda p: yaml.safe_load(Path(p).read_text()))
+            out_path, mods, lambda p: yaml.safe_load(Path(p).read_text())
+        )
         errs = [e for e in errs if e] if isinstance(errs, list) else []
     except Exception as exc:
         errs = [f'quality recheck failed: {exc}']
-    print(f'{CYAN}Generated {out_path.name}: {len(new_items)} items '
-          f'(mcq={sum(1 for i in new_items if i.get("type") == "mcq")}, '
-          f'cloze={sum(1 for i in new_items if i.get("type") == "cloze")}, '
-          f'tf={sum(1 for i in new_items if i.get("type") == "tf")}){NC}')
+    print(
+        f'{CYAN}Generated {out_path.name}: {len(new_items)} items '
+        f'(mcq={sum(1 for i in new_items if i.get("type") == "mcq")}, '
+        f'cloze={sum(1 for i in new_items if i.get("type") == "cloze")}, '
+        f'tf={sum(1 for i in new_items if i.get("type") == "tf")}){NC}'
+    )
     if errs:
         print(f'{YELLOW}Warning: generated file has quality issues:{NC}')
         for e in errs:
@@ -2833,7 +2869,9 @@ def cmd_add_question(
         'tags': [t.strip() for t in tags.split(',') if t.strip()],
     }
     data.append(item)
-    quiz_path.write_text(yaml.dump(data, default_flow_style=False, sort_keys=False, allow_unicode=True) + '\n')
+    quiz_path.write_text(
+        yaml.dump(data, default_flow_style=False, sort_keys=False, allow_unicode=True) + '\n'
+    )
     print(f'{GREEN}Added {item["id"]} to {topic}/{module}/quiz.yaml{NC}')
     cmd_balance_quiz(topic, module)
 
@@ -2860,12 +2898,18 @@ def cmd_balance_cumulative(topic: str):
             continue
         new_qs, stats = quizbalance.balance_quiz(data, f'{topic}-{cuf.stem}')
         shutil.copy2(cuf, cuf.with_suffix('.yaml.bak'))
-        cuf.write_text(yaml.dump(new_qs, default_flow_style=False, sort_keys=False, allow_unicode=True) + '\n')
+        cuf.write_text(
+            yaml.dump(new_qs, default_flow_style=False, sort_keys=False, allow_unicode=True) + '\n'
+        )
         seq = stats['after']
         total = max(1, sum(seq.values()))
-        top_share = (sorted(seq.items(), key=lambda kv: (-kv[1], kv[0]))[0][1] / total) * 100 if seq else 0
+        top_share = (
+            (sorted(seq.items(), key=lambda kv: (-kv[1], kv[0]))[0][1] / total) * 100 if seq else 0
+        )
         status = 'OK' if top_share <= 50 else 'SKEWED'
-        print(f'{cuf.name}: re-lettered {stats["mutated"]}, skipped {stats["skipped"]} — spread {top_share:.0f}% {status}')
+        print(
+            f'{cuf.name}: re-lettered {stats["mutated"]}, skipped {stats["skipped"]} — spread {top_share:.0f}% {status}'
+        )
 
 
 def cmd_checksyntax(
@@ -2908,6 +2952,7 @@ def cmd_checksyntax(
 # ── CLI ─────────────────────────────────────────────────────────
 
 app = typer.Typer(help='Learn Something — study with spaced repetition (FSRS).')
+
 
 def _fence_parity_errors(md_path: Path):
     """Fence-parity walker: text-as-closer, unclosed fences, bare openers."""
@@ -2974,10 +3019,16 @@ def _consistency_errors(t: Path):
     if yaml is not None and syl.exists():
         try:
             data = yaml.safe_load(syl.read_text()) or {}
-            syllabus_ids = [int(m.get('id')) for m in data.get('modules', []) if m.get('id') is not None]
+            syllabus_ids = [
+                int(m.get('id')) for m in data.get('modules', []) if m.get('id') is not None
+            ]
         except Exception:
             pass
-    mod_dirs = sorted(d for d in (t / 'modules').glob('*-*') if d.is_dir()) if (t / 'modules').exists() else []
+    mod_dirs = (
+        sorted(d for d in (t / 'modules').glob('*-*') if d.is_dir())
+        if (t / 'modules').exists()
+        else []
+    )
     dir_nums = {}
     for d in mod_dirs:
         m = re.match(r'^(\d+)-', d.name)
@@ -3052,7 +3103,9 @@ def cmd_doctor(topic: str):
     if not any_errs:
         print(f'\n{GREEN}Doctor: no structural issues found.{NC}')
     else:
-        print(f'\n{YELLOW}Doctor findings above are advisory — run validate for the quality gate.{NC}')
+        print(
+            f'\n{YELLOW}Doctor findings above are advisory — run validate for the quality gate.{NC}'
+        )
     sys.exit(0)
 
 

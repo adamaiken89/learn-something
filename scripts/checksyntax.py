@@ -104,7 +104,7 @@ def check_lesson(text, render_mode='off', lesson_path=None):
         block = blocks[i]
         first_nl = block.find('\n')
         label = block[:first_nl] if first_nl != -1 else block
-        code = block[first_nl + 1:] if first_nl != -1 else ''
+        code = block[first_nl + 1 :] if first_nl != -1 else ''
         block_no = (i + 1) // 2
 
         if label.strip().lower().startswith('mermaid'):
@@ -151,8 +151,9 @@ def main(argv):
             print(f'{path}: not found', file=sys.stderr)
             any_hard = True
             continue
-        hard, warns = check_lesson(path.read_text(encoding='utf-8', errors='replace'),
-                                   render_mode, lesson_path=path)
+        hard, warns = check_lesson(
+            path.read_text(encoding='utf-8', errors='replace'), render_mode, lesson_path=path
+        )
         for w in warns:
             print(f'  WARN {path}: {w}')
         if hard:

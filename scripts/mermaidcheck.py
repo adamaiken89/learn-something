@@ -106,9 +106,7 @@ def validate_block_mmdc(source, cmd=None, offline=False):
             )
             if result.returncode != 0:
                 err_msg = (
-                    result.stderr.strip().split('\n')[0]
-                    if result.stderr
-                    else 'invalid syntax'
+                    result.stderr.strip().split('\n')[0] if result.stderr else 'invalid syntax'
                 )
                 return [err_msg]
             return []
@@ -174,7 +172,9 @@ def safe_mode_errors(content):
 
             # + chains: `A + B + C -->` is invalid syntax; use `&`
             if re.match(r'^\s*\w+(\s*\+\s*\w+)+\s*-->', line):
-                issues.append((idx, ln, "node chain with '+' is invalid — use '&' (e.g. A & B & C --> X)"))
+                issues.append(
+                    (idx, ln, "node chain with '+' is invalid — use '&' (e.g. A & B & C --> X)")
+                )
                 continue
 
             # subgraph titles: unquoted title with parens/CJK/risky chars
@@ -185,9 +185,7 @@ def safe_mode_errors(content):
                 bare = re.sub(r'\w+\s*\[.*\]\s*$', '', rest)
                 bare = re.sub(r'\w+\s*"[^"]*"\s*$', '', bare)
                 if bare and (RISKY_LABEL_RE.search(bare) or CJK_RE.search(bare)):
-                    issues.append(
-                        (idx, ln, 'quote subgraph title — subgraph id["Title here"]')
-                    )
+                    issues.append((idx, ln, 'quote subgraph title — subgraph id["Title here"]'))
 
             # node labels: A[label] where label is unquoted and risky
             for nm in re.finditer(r'\b[A-Za-z_]\w*\[([^\]]*)\]', line):
@@ -196,14 +194,16 @@ def safe_mode_errors(content):
                     continue
                 if '"' in label:
                     # nested quotes inside unquoted-ish label
-                    issues.append(
-                        (idx, ln, 'nested double quote in label — use #quot; entity')
-                    )
+                    issues.append((idx, ln, 'nested double quote in label — use #quot; entity'))
                     continue
                 reasons = _label_issues(label)
                 if reasons:
                     issues.append(
-                        (idx, ln, f'unquoted node label {label!r} ({", ".join(reasons)}) — quote it: X["{label}"]')
+                        (
+                            idx,
+                            ln,
+                            f'unquoted node label {label!r} ({", ".join(reasons)}) — quote it: X["{label}"]',
+                        )
                     )
 
             # edge labels via pipes: -->|label|
@@ -226,9 +226,7 @@ def safe_mode_errors(content):
                 if not (label.startswith('"') and label.endswith('"')) and (
                     RISKY_LABEL_RE.search(label) or CJK_RE.search(label) or '"' in label
                 ):
-                    issues.append(
-                        (idx, ln, f'edge label {label!r} needs quoting or #quot;')
-                    )
+                    issues.append((idx, ln, f'edge label {label!r} needs quoting or #quot;'))
     return issues
 
 

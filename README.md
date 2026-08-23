@@ -11,6 +11,10 @@ Full spec: creation protocol, pedagogy, session types, subject schema, quality r
   ```
   npm install -g @mermaid-js/mermaid-cli
   ```
+- Dev only: `ruff` (lint + format gate — see [CONVENTIONS.md](CONVENTIONS.md)):
+  ```
+  pip install --break-system-packages ruff
+  ```
 
 ## Quick Start
 

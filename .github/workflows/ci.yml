@@ -18,7 +18,7 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Install dependencies
-        run: pip install ruff pyyaml markdown pygments
+        run: pip install 'ruff==0.16.4' pyyaml markdown pygments
       - name: Lint
         run: ruff check --output-format=github scripts/ tests/
       - name: Format check

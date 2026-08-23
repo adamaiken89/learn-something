@@ -69,14 +69,23 @@ def quality_checks(t, module=None, max_chars=12000):
             # Rule 16: module size — WARN only, threshold user-determined via --max-chars.
             # Primary size control is the module time budget (syllabus time_hours ≤ 1.5h).
             if len(content) > max_chars:
-                print(f'{YELLOW}  WARN: lesson.md {len(content)} chars > {max_chars} (--max-chars) — rule 16 (soft target, non-blocking)', file=sys.stderr)
+                print(
+                    f'{YELLOW}  WARN: lesson.md {len(content)} chars > {max_chars} (--max-chars) — rule 16 (soft target, non-blocking)',
+                    file=sys.stderr,
+                )
             # Rule 17: human-readable H1 — `# Module NN: <name>` with plain-number id.
             # Slug leak (`# Module NN-name: ...`) = folder name copied into the title; WARN only.
             h1 = re.search(r'(?m)^#\s*Module\s+([^:]+):', content)
             if not h1:
-                print(f'{YELLOW}  WARN: no `# Module NN: <name>` H1 — rule 17 (human-readable title){NC}', file=sys.stderr)
+                print(
+                    f'{YELLOW}  WARN: no `# Module NN: <name>` H1 — rule 17 (human-readable title){NC}',
+                    file=sys.stderr,
+                )
             elif not h1.group(1).strip().isdigit():
-                print(f'{YELLOW}  WARN: H1 module id "{h1.group(1).strip()}" is not a plain number — rule 17 (no directory slug in title){NC}', file=sys.stderr)
+                print(
+                    f'{YELLOW}  WARN: H1 module id "{h1.group(1).strip()}" is not a plain number — rule 17 (no directory slug in title){NC}',
+                    file=sys.stderr,
+                )
             # Fence-aware view: strip ``` code/mermaid blocks so content-block rules
             # only see prose/blockquotes (kills Mermaid node-brace false positives too)
             non_fence = re.sub(r'```[^\n]*\n.*?```', '', content, flags=re.DOTALL)
@@ -95,10 +104,10 @@ def quality_checks(t, module=None, max_chars=12000):
             if not ok13:
                 heading = re.search(r'(?m)^##\s+Spot the Mistake\b', content)
                 if heading:
-                    sect = content[heading.end():]
+                    sect = content[heading.end() :]
                     nxt = re.search(r'^##\s+', sect, re.MULTILINE)
                     if nxt:
-                        sect = sect[:nxt.start()]
+                        sect = sect[: nxt.start()]
                     sect_non_fence = re.sub(r'```[^\n]*\n.*?```', '', sect, flags=re.DOTALL)
                     ok13 = any(ln.strip() for ln in sect_non_fence.split('\n'))
             if not ok13:
@@ -150,7 +159,9 @@ def quality_checks(t, module=None, max_chars=12000):
         )
 
     for cuf in cum_files:
-        cerrs = cumulative_quality_errors(cuf, mods, loader=lambda p: _yaml.safe_load(p.read_text()))
+        cerrs = cumulative_quality_errors(
+            cuf, mods, loader=lambda p: _yaml.safe_load(p.read_text())
+        )
         if cerrs:
             results.append((cuf.name, cerrs))
 
@@ -194,9 +205,7 @@ def quiz_quality_errors(qs, n_objectives=0):
         c = Counter(ds)
         p3 = c.get(3, 0) / len(ds)
         if p3 > 0.4:
-            errs.append(
-                f'quality: difficulty 3 dominates ({p3:.0%}) — target ~40/40/20'
-            )
+            errs.append(f'quality: difficulty 3 dominates ({p3:.0%}) — target ~40/40/20')
     return errs
 
 
@@ -206,9 +215,7 @@ def cumulative_quality_errors(cuf, mods, loader):
     m = re.match(r'^cumulative_quiz_(\d+)-(\d+)\.yaml$', cuf.name)
     lo = hi = None
     if not m:
-        range_errs.append(
-            'quality: filename must carry module range cumulative_quiz_XX-YY.yaml'
-        )
+        range_errs.append('quality: filename must carry module range cumulative_quiz_XX-YY.yaml')
     else:
         lo, hi = int(m.group(1)), int(m.group(2))
         if lo < 1 or hi < lo:
@@ -232,9 +239,7 @@ def cumulative_quality_errors(cuf, mods, loader):
         mcq, cloze, tf = c.get('mcq', 0), c.get('cloze', 0), c.get('tf', 0)
         errs = []
         if mcq < 1 or cloze < 1 or tf < 1:
-            errs.append(
-                f'quality: cumulative type mix {dict(c)} — need ≥1 each of mcq/cloze/tf'
-            )
+            errs.append(f'quality: cumulative type mix {dict(c)} — need ≥1 each of mcq/cloze/tf')
         if len(cq) < 8:
             errs.append(f'quality: {len(cq)} questions < 8 minimum')
         if lo is not None and not range_errs:

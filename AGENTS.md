@@ -1,5 +1,9 @@
 # Learn Something — Agent Modification Guide
 
+> Code/file conventions live in [CONVENTIONS.md](CONVENTIONS.md) — formatting,
+> naming, failure philosophy, test patterns, workflow checklist. Read it before
+> editing; keep it in sync when conventions change.
+
 ## Skill Structure
 
 ```
