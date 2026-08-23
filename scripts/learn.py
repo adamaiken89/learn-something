@@ -496,7 +496,9 @@ def cmd_create_module(topic: str, module_id: str, name: Optional[str] = None):
         with open(lesson_tpl) as f:
             content = f.read()
         content = content.replace('[Title]', name)
-        content = content.replace('Module N:', f'Module {module_id}:')
+        # H1 must carry the plain number, never the directory slug (rule 17)
+        module_num = module_id.split('-', 1)[0]
+        content = content.replace('Module N:', f'Module {module_num}:')
         with open(mod_path / 'lesson.md', 'w') as f:
             f.write(content)
 
@@ -504,6 +506,11 @@ def cmd_create_module(topic: str, module_id: str, name: Optional[str] = None):
     quiz_tpl = SKILL_DIR / 'templates' / 'quiz.yaml'
     if quiz_tpl.exists():
         shutil.copy2(quiz_tpl, mod_path / 'quiz.yaml')
+
+    # Copy cloze template
+    cloze_tpl = SKILL_DIR / 'templates' / 'cloze.yaml'
+    if cloze_tpl.exists():
+        shutil.copy2(cloze_tpl, mod_path / 'cloze.yaml')
 
     print(f'{GREEN}Created module: {mod_path}{NC}')
     print('  lesson.md — edit content')

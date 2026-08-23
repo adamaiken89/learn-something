@@ -1,138 +1,147 @@
 # Module N: [Title]   <!-- Human-readable only. N = plain number, no directory slug (rule 17). Title = syllabus module name, e.g. `# Module 09: Layout & Container Composition`. -->
 
-Est. study time: [X]h
-Language: [en/zh/yue]
-Description: [Optional short description for cover generation]
+Est. study time: 1h
+Language: en
+Description: Sample module on HTTP caching — shows the expected voice, structure, and exercise density. Replace every section with your own content; keep the section skeleton and blockquote forms.
 
 ## Knowledge Map
 
 ```mermaid
 mindmap
-  root((Module Title))
-    Topic A
-      Sub-concept 1
-      Sub-concept 2
-    Topic B
-      Sub-concept 3
+  root((HTTP Caching))
+    Freshness
+      Cache-Control max-age
+      Expires header
+    Validation
+      ETag
+      If-None-Match
+    Cache Types
+      Browser cache
+      Shared proxy cache
 ```
 
 ---
 
 ## Learning Objectives (maps to course CILOs)
-- [Objective 1 — serves CILO #N]
-- [Objective 2 — serves CILO #N]
+- Explain how a cached response stays "fresh" and what forces revalidation
+- Choose between freshness and validation strategies for a given resource
 
 ---
 
 ## Real-World Example
 
-[Start with concrete scenario from daily work. Pose a problem learner has likely encountered. What went wrong? Why did it happen?]
+Your team ships a CSS bundle. An hour later users complain the site still shows yesterday's styles. You did deploy — but their browser never asked the server. The response was still fresh per its `Cache-Control: max-age=86400`, so the browser skipped the network entirely.
 
-> **Think**: Why did the [person/team] encounter this problem? What would you have done differently?
+> **Think**: Why did the browser not pick up the new file? What would you have done differently?
 >
-> *Answer: [brief explanation]*
+> *Answer: The response was fresh for 24 hours, so no request was made. Either shorten max-age for hashed assets or use fingerprinted filenames with far-future expiry.*
 
 ---
 
 ## Core Content
 
-### [Section 1: Concept Name]
+### Freshness: telling caches how long to trust a response
 
-[Introduce concept using the real-world example above. Explain what it is and why it exists.]
+Freshness is a contract set by the server. `Cache-Control: max-age=60` says: reuse this response without contacting the server for 60 seconds. During that window the browser renders from disk.
 
-> ```mermaid
-> [Mermaid diagram showing relationship, workflow, or state transition]
-> ```
+```mermaid
+flowchart LR
+    A["Request /app.css"] --> B{"Fresh copy?"}
+    B -->|Yes| C["Serve from cache"]
+    B -->|No| D["GET server"]
+    D --> E["Store + serve"]
+```
 
-> **Think**: [Question that challenges learner on concept just introduced]
+> **Think**: Why does a longer max-age risk showing stale UI after a deploy?
 >
-> *Answer: [Brief explanation so learner can self-check]*
+> *Answer: Freshness means zero server contact — the cache cannot know the origin changed until the window expires.*
 
-> **Cloze**: "[Sentence or two with {blank} for key term to fill in.]"
+> **Cloze**: "The directive that tells a browser to reuse a response without contacting the server is {max-age}."
 >
-> *Answer: [the blank term]*
-
-Formula: `[relevant formula]`
+> *Answer: max-age*
 
 **Example:**
 ```
-[Concrete example tied to the real-world scenario]
+Cache-Control: public, max-age=31536000, immutable
+# Fingerprinted asset: app.a8f3c2.css — safe to cache for a year
 ```
 
-> **Predict**: [Causal question about what happens next given the concept just explained?]
+> **Predict**: What happens when max-age expires but the file did not change?
 >
-> *Answer: [Explanation of outcome and why]*
+> *Answer: The browser revalidates; with an unchanged ETag the server returns 304 Not Modified — cheap round trip, no body.*
 
-### [Section 2: Concept Name]
+### Validation: cheap checks instead of full downloads
 
-[Extended explanation, edge cases, common pitfalls]
+Validation swaps payload size for a request round trip. The server stamps responses with an `ETag` (a content fingerprint). A stale cache sends `If-None-Match` and gets a 304 unless content changed.
 
-> **Think**: [Question probing edge case or common mistake]
+> **Think**: Why is 304 cheaper than 200 even though both hit the network?
 >
-> *Answer: [Explanation resolving the question]*
+> *Answer: 304 carries headers only — kilobytes of body are skipped, and downstream caches can keep serving their stored copy.*
 
-> **Cloze**: "[Sentence with {blank} for key term]"
+> **Cloze**: "A stale cache asks the server whether its copy is current by sending {If-None-Match} with the stored ETag."
 >
-> *Answer: [the blank term]*
+> *Answer: If-None-Match*
 
-> **Spot the Mistake**: [Present a plausible wrong solution or reasoning. Include what someone might mistakenly think.]
+> **Spot the Mistake**: A developer sets `Cache-Control: no-store` on an HTML page to fix staleness, then wonders why the site feels slow.
 >
 > What's wrong?
 >
-> *Answer: [Explain the error and correct framing]*
+> *Answer: no-store forbids caching entirely, so every navigation re-downloads everything. Prefer no-cache (store but always revalidate) for HTML, and long max-age for fingerprinted assets.*
 
-### [Section 3: Application in Learner's Domain]
+### Choosing a strategy per resource type
 
-[How this plays out in learner's industry or daily work. Show a worked example step by step.]
+Rule of thumb: fingerprinted static assets get long freshness; user-specific HTML gets validation; authenticated API responses get `private` so shared proxies never store them.
 
-> **Think**: [Question connecting concept to practical scenario]
+> **Think**: Where would `public, max-age=600` on an API response bite you in production?
 >
-> *Answer: [How this plays out in real work]*
+> *Answer: Shared proxies may serve one user's response to another within the window — user-specific data needs `private` or explicit no-cache.*
 
-> **Predict**: [What would happen if you changed a parameter or made an error in this scenario?]
+> **Predict**: If you halve max-age on your CDN-cached homepage from 1 hour to 30 minutes, what happens to origin traffic?
 >
-> *Answer: [Explanation of the changed outcome]*
+> *Answer: Roughly doubles for that route — every freshness window expiration turns a cache hit into a potential origin fetch.*
 
 ---
 
 ### Why This Matters
 
-[Explain why this module's concepts matter in real-world practice. What problem do they solve? Who uses them daily? What happens if you get this wrong?]
+Caching decisions trade correctness against latency and cost on every deploy. Teams that get it wrong either ship stale UI to users or pay for full downloads on every visit. CDNs, browsers, and corporate proxies all honor these same headers, so one well-chosen directive scales across every client.
 
 ---
 
 ## Key Takeaways
-- [Takeaway 1]
-- [Takeaway 2]
-- [Takeaway 3]
-- [Takeaway 4]
-- [Takeaway 5]
+- Freshness = reuse without contact; validation = cheap check before reuse
+- `max-age` controls freshness; `ETag`/`If-None-Match` control validation
+- 304 responses skip the body — cheap even though they hit the network
+- Fingerprinted filenames make long max-age safe for static assets
+- User-specific responses need `private` so shared caches skip them
 
 ---
 
 ## Common Misconception
 
-[One specific misunderstanding beginners hold about this topic. State misconception → explain why it's wrong → give correct framing.]
+**"no-cache means do not cache."**
+
+It means store but revalidate before use. Browsers keep the copy and check the ETag each time — usually getting a fast 304 back. The directive that forbids storage entirely is `no-store`.
 
 ---
 
 ## Spot the Mistake
 
-[Another error-spotting exercise — can be a code snippet, calculation, or reasoning chain with an embedded error.]
+A team sets `Cache-Control: max-age=3600` on their `index.html` so "the site loads instantly." After each deploy, users report the old version for up to an hour.
 
 What's wrong?
 
-*Answer: [Explanation of the error]*
+*Answer: Long freshness on entry-point HTML pins users to the old build, which references old asset hashes. HTML should be `no-cache` (revalidate); only fingerprinted assets deserve long max-age.*
 
 ---
 
 ## Feynman Explain
-(Teach [core concept] to a child. Use simplest words. No jargon. Give concrete example from daily work. Do NOT move on until you can explain it clearly without vague language.)
+(Teach HTTP caching to a new teammate using only the fridge-and-grocery analogy: checking the date label vs calling the store. No jargon until they ask.)
 
 ---
 
 ## Reframe
-(Pause. Judge [core concept]: does this make sense? When would this logic break? What's the counterargument? Write your evaluation.)
+(Pause. Judge the tradeoff: is aggressive caching worth occasional staleness? When would you reject it — dashboards? billing pages? Write your evaluation.)
 
 ---
 
