@@ -18,7 +18,18 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Install dependencies
-        run: pip install 'ruff==0.16.4' pyyaml markdown pygments
+        run: |
+          # typer/click pinned to the locally verified combo — newer releases
+          # changed CliRunner behavior and broke help-output assertions.
+          pip install 'ruff==0.16.4' 'typer==0.26.8' 'click==8.4.2' pyyaml markdown pygments
+      - name: Install Chromium deps (mmdc/puppeteer needs these to launch)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
+            libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
+            libgbm1 libasound2 libpangocairo-1.0-0 libpango-1.0-0 libcairo2 \
+            libx11-xcb1 libxcursor1 libgtk-3-0
       - name: Lint
         run: ruff check --output-format=github scripts/ tests/
       - name: Format check

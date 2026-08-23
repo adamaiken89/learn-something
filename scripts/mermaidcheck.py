@@ -30,6 +30,24 @@ MMDC_INSTALL_HINT = (
     '(or allow npx network access)'
 )
 
+MMDC_BROWSER_HINT = (
+    'mmdc could not launch its headless browser — install Chromium system deps '
+    '(debian: apt-get install -y libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 '
+    'libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 '
+    'libgbm1 libasound2) or point PUPPETEER_EXECUTABLE_PATH at a working Chrome'
+)
+
+_BROWSER_FAIL_RE = re.compile(r'Failed to launch the browser|browser process', re.I)
+
+
+def is_env_error(msg):
+    """True for environment-level failures (tool missing / browser broken).
+
+    Environment errors are never content errors — callers may use this to
+    distinguish 'your diagram is bad' from 'your machine is misconfigured'.
+    """
+    return msg in (MMDC_INSTALL_HINT, MMDC_BROWSER_HINT)
+
 
 # ---------------------------------------------------------------------------
 # Tool resolution
@@ -108,6 +126,10 @@ def validate_block_mmdc(source, cmd=None, offline=False):
                 err_msg = (
                     result.stderr.strip().split('\n')[0] if result.stderr else 'invalid syntax'
                 )
+                if _BROWSER_FAIL_RE.search(err_msg):
+                    # Puppeteer can't launch Chromium — environment problem,
+                    # not a content problem. Report the actionable hint.
+                    return [MMDC_BROWSER_HINT]
                 return [err_msg]
             return []
         except subprocess.TimeoutExpired:
@@ -132,9 +154,36 @@ def validate_blocks_mmdc(content, cmd=None, offline=False):
 
     errors = []
     for idx, _, block in extract_mermaid_blocks(content):
-        for msg in validate_block_mmdc(block, cmd=cmd):
+        msgs = validate_block_mmdc(block, cmd=cmd)
+        env = [m for m in msgs if is_env_error(m)]
+        if env:
+            # Environment is broken — every block would repeat the same hint.
+            # Report once as an environment error (idx 0) and stop.
+            return [(0, env[0])]
+        for msg in msgs:
             errors.append((idx, msg))
     return errors
+
+
+# ---------------------------------------------------------------------------
+# Readiness probe (for test skips)
+
+
+_READY = None
+
+
+def mmdc_ready():
+    """True if mmdc works end-to-end right now (tool present AND browser launches).
+
+    One tiny real validation, cached. Use this — not `resolve_mmdc() is not
+    None` — to gate tests: resolve can succeed via npx while puppeteer still
+    cannot launch Chromium.
+    """
+    global _READY
+    if _READY is None:
+        errs = validate_block_mmdc('flowchart LR\n    A --> B')
+        _READY = not any(is_env_error(m) for m in errs)
+    return _READY
 
 
 # ---------------------------------------------------------------------------

@@ -247,12 +247,35 @@ def test_mmdc_fail_fast_when_unavailable():
     print('  mmdc_fail_fast_when_unavailable: OK')
 
 
+BROWSER_FAIL_CMD = [
+    'sh',
+    '-c',
+    'echo "Error: Failed to launch the browser process:  Code: null" >&2; exit 1',
+]
+
+
+def test_browser_launch_failure_is_env_error():
+    """Puppeteer can't launch Chromium → actionable hint, NOT a content error."""
+    errs = mermaidcheck.validate_block_mmdc(GOOD_FLOWCHART_MD, cmd=BROWSER_FAIL_CMD)
+    assert errs == [mermaidcheck.MMDC_BROWSER_HINT], errs
+    assert mermaidcheck.is_env_error(errs[0])
+    print('  browser_launch_failure_is_env_error: OK')
+
+
+def test_browser_env_error_reported_once_at_doc_level():
+    """Broken environment aborts the whole document with a single idx-0 error."""
+    md = GOOD_FLOWCHART_MD + BROKEN_FLOWCHART_MD
+    errs = mermaidcheck.validate_blocks_mmdc(md, cmd=BROWSER_FAIL_CMD)
+    assert errs == [(0, mermaidcheck.MMDC_BROWSER_HINT)], errs
+    print('  browser_env_error_reported_once_at_doc_level: OK')
+
+
 def test_sequence_alt_end_not_subgraph_error():
     """Regression: alt/else/end in sequenceDiagram must validate clean via mmdc."""
-    cmd = mermaidcheck.resolve_mmdc(offline=True)[0]
-    if cmd is None:
-        print('  sequence_alt_end_clean: SKIP (no global mmdc)')
+    if not mermaidcheck.mmdc_ready():
+        print('  sequence_alt_end_clean: SKIP (mmdc/browser not ready)')
         return
+    cmd = mermaidcheck.resolve_mmdc()[0]
     content = """```mermaid
 sequenceDiagram
     A->>B: hi
@@ -270,10 +293,10 @@ sequenceDiagram
 
 def test_flowchart_missing_end_flagged_by_mmdc():
     """Real parser catches unclosed subgraph."""
-    cmd = mermaidcheck.resolve_mmdc(offline=True)[0]
-    if cmd is None:
-        print('  flowchart_missing_end_flagged: SKIP (no global mmdc)')
+    if not mermaidcheck.mmdc_ready():
+        print('  flowchart_missing_end_flagged: SKIP (mmdc/browser not ready)')
         return
+    cmd = mermaidcheck.resolve_mmdc()[0]
     errs = mermaidcheck.validate_blocks_mmdc(BROKEN_FLOWCHART_MD, cmd=cmd)
     assert errs and all(idx == 1 for idx, _ in errs), errs
     print('  flowchart_missing_end_flagged: OK')
@@ -296,10 +319,10 @@ def test_checksyntax_mermaid_fail_fast():
 def test_checksyntax_valid_diagram_clean_with_mmdc():
     import checksyntax
 
-    cmd = checksyntax.mermaidcheck.resolve_mmdc(offline=True)[0]
-    if cmd is None:
-        print('  checksyntax_valid_diagram_clean: SKIP (no global mmdc)')
+    if not mermaidcheck.mmdc_ready():
+        print('  checksyntax_valid_diagram_clean: SKIP (mmdc/browser not ready)')
         return
+    cmd = mermaidcheck.resolve_mmdc()[0]
     orig = checksyntax.mermaidcheck.resolve_mmdc
     try:
         checksyntax.mermaidcheck.resolve_mmdc = lambda offline=False: (cmd, False)
@@ -317,10 +340,10 @@ def test_enrich_postwrite_guard_blocks_bad_mermaid():
     """LLM output with broken mermaid → enrich_lesson returns False, backup kept."""
     import enrich
 
-    cmd = mermaidcheck.resolve_mmdc(offline=True)[0]
-    if cmd is None:
-        print('  enrich_postwrite_guard_blocks_bad_mermaid: SKIP (no global mmdc)')
+    if not mermaidcheck.mmdc_ready():
+        print('  enrich_postwrite_guard_blocks_bad_mermaid: SKIP (mmdc/browser not ready)')
         return
+    cmd = mermaidcheck.resolve_mmdc()[0]
     with tempfile.TemporaryDirectory() as td:
         lp = Path(td) / 'lesson.md'
         lp.write_text('# Lesson\n\ntext\n', encoding='utf-8')
@@ -342,10 +365,10 @@ def test_enrich_postwrite_guard_blocks_bad_mermaid():
 def test_enrich_postwrite_guard_passes_good_mermaid():
     import enrich
 
-    cmd = mermaidcheck.resolve_mmdc(offline=True)[0]
-    if cmd is None:
-        print('  enrich_postwrite_guard_passes_good_mermaid: SKIP (no global mmdc)')
+    if not mermaidcheck.mmdc_ready():
+        print('  enrich_postwrite_guard_passes_good_mermaid: SKIP (mmdc/browser not ready)')
         return
+    cmd = mermaidcheck.resolve_mmdc()[0]
     with tempfile.TemporaryDirectory() as td:
         lp = Path(td) / 'lesson.md'
         lp.write_text('# Lesson\n\ntext\n', encoding='utf-8')

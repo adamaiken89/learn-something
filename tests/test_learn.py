@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'scripts'))
 import learn
+import mermaidcheck
 
 
 def _make_subject(base, name, lang='en'):
@@ -1229,6 +1230,9 @@ def test_cmd_sync_pull_missing_reader_exits():
 
 
 def test_cmd_validate_passes():
+    if not mermaidcheck.mmdc_ready():
+        print('  cmd_validate_passes: SKIP (mmdc/browser not ready)')
+        return
     with tempfile.TemporaryDirectory() as td:
         base = Path(td)
         orig = learn.SUBJECTS_DIR
@@ -1363,6 +1367,9 @@ def _strip_mindmap(base):
 
 
 def test_validate_rule16_size_warns_not_err():
+    if not mermaidcheck.mmdc_ready():
+        print('  validate_rule16_size_warns_not_err: SKIP (mmdc/browser not ready)')
+        return
     with tempfile.TemporaryDirectory() as td:
         base = Path(td)
         orig = learn.SUBJECTS_DIR
@@ -1462,6 +1469,9 @@ def test_balance_quiz_missing_module():
 
 
 def test_checksyntax_passes_clean_lesson():
+    if not mermaidcheck.mmdc_ready():
+        print('  checksyntax_passes_clean_lesson: SKIP (mmdc/browser not ready)')
+        return
     with tempfile.TemporaryDirectory() as td:
         base = Path(td)
         orig = learn.SUBJECTS_DIR
@@ -1552,8 +1562,11 @@ def test_cli_quiz_help():
         print('  cli_quiz_help: SKIP (no typer.testing)')
         return
     result = _runner.invoke(app, ['quiz', '--help'])
-    assert result.exit_code == 0
-    assert '--adaptive' in result.output
+    assert result.exit_code == 0, (
+        f'quiz --help exit={result.exit_code} output={result.output!r} '
+        f'exception={result.exception!r}'
+    )
+    assert '--adaptive' in result.output, f'quiz help output: {result.output!r}'
 
 
 def test_cli_feynman_alias():
@@ -1569,8 +1582,11 @@ def test_cli_validate_help():
         print('  cli_validate_help: SKIP (no typer.testing)')
         return
     result = _runner.invoke(app, ['validate', '--help'])
-    assert result.exit_code == 0
-    assert '--max-chars' in result.output
+    assert result.exit_code == 0, (
+        f'validate --help exit={result.exit_code} output={result.output!r} '
+        f'exception={result.exception!r}'
+    )
+    assert '--max-chars' in result.output, f'validate help output: {result.output!r}'
 
 
 if __name__ == '__main__':
