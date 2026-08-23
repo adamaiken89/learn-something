@@ -2588,6 +2588,253 @@ def cmd_balance_quiz(topic: str, module: str):
     print(f'{GREEN}Answer spread OK (max share {top_share:.0f}%){NC}')
 
 
+def _cum_range_validate(topic, lo, hi):
+    """Validate a cumulative range; returns (t_path, mods) or exits."""
+    t = _check_topic(topic)
+    mods = sorted(d.name for d in (t / 'modules').iterdir() if d.is_dir())
+    if not mods:
+        print(f'{RED}No modules in {topic}.{NC}')
+        sys.exit(1)
+    course_max = max(int(m.split('-', 1)[0]) for m in mods)
+    if lo < 1 or hi < lo:
+        print(f'{RED}Invalid range {lo}-{hi} (need 1 <= lo <= hi).{NC}')
+        sys.exit(1)
+    if hi - lo + 1 > 4:
+        print(f'{RED}Range {lo}-{hi} spans {hi - lo + 1} modules — max 4 per cumulative quiz.{NC}')
+        sys.exit(1)
+    if hi > course_max:
+        print(f'{RED}Range ends at module {hi}, beyond course max ({course_max}).{NC}')
+        sys.exit(1)
+    return t, mods
+
+
+def cmd_gen_cumulative(topic: str, rng: str, force: bool = False):
+    """Generate cumulative_quiz_XX-YY.yaml from existing module question banks.
+
+    Assembles >=8 items covering the given <=4-module window: MCQs and cloze
+    are pulled verbatim from the modules' banks (ids rewritten to cum.N),
+    true/false items synthesized from cloze pairs when needed. The result is
+    re-lettered via quizbalance so rotation/spread rules pass.
+    """
+    m = re.match(r'^(\d+)-(\d+)$', rng)
+    if not m:
+        print(f'{RED}Range must look like 01-04 (got "{rng}").{NC}')
+        sys.exit(1)
+    lo, hi = int(m.group(1)), int(m.group(2))
+    t, mods = _cum_range_validate(topic, lo, hi)
+
+    if yaml is None:
+        print(f'{RED}PyYAML not available. Install: pip install --break-system-packages pyyaml{NC}')
+        sys.exit(1)
+    try:
+        import quizbalance
+    except ImportError:
+        print(f'{RED}quizbalance.py not found in scripts directory.{NC}')
+        sys.exit(1)
+
+    out_path = t / f'cumulative_quiz_{lo:02d}-{hi:02d}.yaml'
+    if out_path.exists() and not force:
+        print(f'{RED}{out_path.name} already exists. Use --force to overwrite.{NC}')
+        sys.exit(1)
+
+    in_range = [d for d in mods if lo <= int(d.split('-', 1)[0]) <= hi]
+    mcq_bank, cloze_bank = [], []
+    for mod_name in in_range:
+        num = int(mod_name.split('-', 1)[0])
+        qp = t / 'modules' / mod_name / 'quiz.yaml'
+        cp = t / 'modules' / mod_name / 'cloze.yaml'
+        if qp.exists():
+            qs = yaml.safe_load(qp.read_text()) or []
+            for q in qs:
+                if isinstance(q, dict) and isinstance(q.get('options'), dict):
+                    q = dict(q)
+                    q['source_modules'] = [num]
+                    mcq_bank.append(q)
+        if cp.exists():
+            cs = yaml.safe_load(cp.read_text()) or []
+            for c in cs:
+                if isinstance(c, dict) and c.get('answer'):
+                    c = dict(c)
+                    c['source_modules'] = [num]
+                    cloze_bank.append(c)
+
+    if len(mcq_bank) < 3 or len(cloze_bank) < 2:
+        print(f'{RED}Banks too thin in modules {lo}-{hi}: {len(mcq_bank)} MCQs, {len(cloze_bank)} cloze. '
+              f'Need >=3 MCQs and >=2 cloze to build a valid file.{NC}')
+        sys.exit(1)
+
+    items, n = [], 0
+    def take(bank, k):
+        nonlocal n
+        got = bank[:k]
+        del bank[:k]
+        return got
+
+    # 4 MCQ + 3 cloze + 3 tf target (10 items), min floor enforced by quality gate
+    for src in take(mcq_bank, 4):
+        n += 1
+        items.append({
+            'id': f'cum.{n}', 'type': 'mcq',
+            'question': src.get('question', ''),
+            'source_modules': src['source_modules'],
+            'options': {k: str(v) for k, v in src['options'].items()},
+            'answer': str(src.get('answer', 'a')).lower(),
+            'explanation': src.get('explanation', ''),
+            'difficulty': int(src.get('difficulty', 2)),
+            'tags': ['cross-module'] + list(src.get('tags') or []),
+        })
+    for src in take(cloze_bank, 3):
+        n += 1
+        items.append({
+            'id': f'cum.{n}', 'type': 'cloze',
+            'question': src.get('question', ''),
+            'source_modules': src['source_modules'],
+            'answer': src.get('answer', ''),
+            'explanation': src.get('explanation', ''),
+            'difficulty': int(src.get('difficulty', 2)),
+            'tags': ['cross-module'] + list(src.get('tags') or []),
+        })
+
+    # synthesize T/F statements from remaining cloze until we have >=3 tf
+    tf_made = 0
+    while len([i for i in items if i['type'] == 'tf']) < 3 and cloze_bank:
+        src = cloze_bank.pop(0)
+        ans = str(src.get('answer', '')).strip()
+        q = str(src.get('question', ''))
+        if '{' in q and '}' in q and ans:
+            true_stmt = re.sub(r'\{[^}]*\}', ans, q, count=1)
+            wrong = re.sub(r'\{[^}]*\}', 'NOT-' + ans.split('/')[0].strip(), q, count=1)
+            smod = src['source_modules']
+            n += 1
+            items.append({'id': f'cum.{n}', 'type': 'tf', 'statement': true_stmt,
+                          'source_modules': smod, 'answer': True,
+                          'explanation': src.get('explanation', ''),
+                          'difficulty': int(src.get('difficulty', 2)),
+                          'tags': ['cross-module', 'recall']})
+            n += 1
+            items.append({'id': f'cum.{n}', 'type': 'tf', 'statement': wrong,
+                          'source_modules': smod, 'answer': False,
+                          'explanation': f'The blanked term was {ans}.',
+                          'difficulty': int(src.get('difficulty', 2)),
+                          'tags': ['cross-module', 'misconception']})
+            tf_made += 2
+    if tf_made == 0:
+        print(f'{RED}Could not synthesize any true/false items (cloze questions lack {{blank}} markers).{NC}')
+        sys.exit(1)
+
+    # balance mcq answers deterministically
+    seed = f'{topic}-cum-{rng}'
+    new_items, stats = quizbalance.balance_quiz(items, seed)
+
+    text = yaml.dump(new_items, default_flow_style=False, sort_keys=False, allow_unicode=True) + '\n'
+    bak = out_path.with_suffix('.yaml.bak')
+    if out_path.exists():
+        shutil.copy2(out_path, bak)
+        print(f'  Backup: {bak}')
+    out_path.write_text(text)
+
+    # verify against the same quality rules validate uses
+    try:
+        import quality
+        errs = quality.cumulative_quality_errors(
+            out_path, mods, lambda p: yaml.safe_load(Path(p).read_text()))
+        errs = [e for e in errs if e] if isinstance(errs, list) else []
+    except Exception as exc:
+        errs = [f'quality recheck failed: {exc}']
+    print(f'{CYAN}Generated {out_path.name}: {len(new_items)} items '
+          f'(mcq={sum(1 for i in new_items if i.get("type") == "mcq")}, '
+          f'cloze={sum(1 for i in new_items if i.get("type") == "cloze")}, '
+          f'tf={sum(1 for i in new_items if i.get("type") == "tf")}){NC}')
+    if errs:
+        print(f'{YELLOW}Warning: generated file has quality issues:{NC}')
+        for e in errs:
+            print(f'  {e}')
+        sys.exit(1)
+    print(f'{GREEN}Quality gate OK.{NC}')
+
+
+def cmd_add_question(
+    topic: str,
+    module: str,
+    q: str = typer.Option(..., '--q', help='Question text.'),
+    a: str = typer.Option(..., '--a', help='Option a text.'),
+    b: str = typer.Option(..., '--b', help='Option b text.'),
+    c: str = typer.Option('', '--c', help='Option c text.'),
+    d: str = typer.Option('', '--d', help='Option d text.'),
+    correct: str = typer.Option(..., '--correct', help='Correct letter a-d.'),
+    difficulty: int = typer.Option(2, '--difficulty', min=1, max=3),
+    tags: str = typer.Option('concept', '--tags', help='Comma-separated tags.'),
+    explanation: str = typer.Option('', '--explain', help='Explanation text.'),
+):
+    """Append one schema-valid MCQ to a module's quiz.yaml, then rebalance."""
+    _check_topic(topic)
+    path = _check_module(topic, module)
+    quiz_path = path / 'quiz.yaml'
+    if yaml is None:
+        print(f'{RED}PyYAML not available.{NC}')
+        sys.exit(1)
+    correct = correct.strip().lower()
+    if correct not in ('a', 'b', 'c', 'd'):
+        print(f'{RED}--correct must be a/b/c/d (got "{correct}").{NC}')
+        sys.exit(1)
+    if not c or not d:
+        print(f'{RED}Schema requires exactly 4 options (a,b,c,d); provide --c and --d.{NC}')
+        sys.exit(1)
+    options = {'a': a, 'b': b, 'c': c, 'd': d}
+
+    data = []
+    if quiz_path.exists():
+        data = yaml.safe_load(quiz_path.read_text()) or []
+    if not isinstance(data, list):
+        print(f'{RED}quiz.yaml must be a top-level list.{NC}')
+        sys.exit(1)
+    mod_num = module.split('-', 1)[0]
+    next_n = len(data) + 1
+    item = {
+        'id': f'{mod_num}.{next_n}',
+        'question': q,
+        'options': {k: options[k] for k in ('a', 'b', 'c', 'd')},
+        'answer': correct,
+        'explanation': explanation,
+        'difficulty': difficulty,
+        'tags': [t.strip() for t in tags.split(',') if t.strip()],
+    }
+    data.append(item)
+    quiz_path.write_text(yaml.dump(data, default_flow_style=False, sort_keys=False, allow_unicode=True) + '\n')
+    print(f'{GREEN}Added {item["id"]} to {topic}/{module}/quiz.yaml{NC}')
+    cmd_balance_quiz(topic, module)
+
+
+def cmd_balance_cumulative(topic: str):
+    """Re-letter MCQ answers in every cumulative_quiz_*.yaml of a topic."""
+    _check_topic(topic)
+    if yaml is None:
+        print(f'{RED}PyYAML not available.{NC}')
+        sys.exit(1)
+    try:
+        import quizbalance
+    except ImportError:
+        print(f'{RED}quizbalance.py not found in scripts directory.{NC}')
+        sys.exit(1)
+    files = sorted(_topic_path(topic).glob('cumulative_quiz_*.yaml'))
+    if not files:
+        print(f'{YELLOW}No cumulative_quiz_*.yaml files in {topic}.{NC}')
+        return
+    for cuf in files:
+        data = yaml.safe_load(cuf.read_text())
+        if not isinstance(data, list):
+            print(f'{YELLOW}Skip {cuf.name}: not a top-level list.{NC}')
+            continue
+        new_qs, stats = quizbalance.balance_quiz(data, f'{topic}-{cuf.stem}')
+        shutil.copy2(cuf, cuf.with_suffix('.yaml.bak'))
+        cuf.write_text(yaml.dump(new_qs, default_flow_style=False, sort_keys=False, allow_unicode=True) + '\n')
+        seq = stats['after']
+        total = max(1, sum(seq.values()))
+        top_share = (sorted(seq.items(), key=lambda kv: (-kv[1], kv[0]))[0][1] / total) * 100 if seq else 0
+        status = 'OK' if top_share <= 50 else 'SKEWED'
+        print(f'{cuf.name}: re-lettered {stats["mutated"]}, skipped {stats["skipped"]} — spread {top_share:.0f}% {status}')
+
+
 def cmd_checksyntax(
     topic: str,
     module: str,
@@ -2663,6 +2910,9 @@ app.command('fsrs-predict')(cmd_fsrs_predict)
 app.command('render-diagrams')(cmd_render_diagrams)
 app.command('mindmap')(cmd_mindmap)
 app.command('balance-quiz')(cmd_balance_quiz)
+app.command('gen-cumulative')(cmd_gen_cumulative)
+app.command('add-question')(cmd_add_question)
+app.command('balance-cumulative')(cmd_balance_cumulative)
 app.command('checksyntax')(cmd_checksyntax)
 
 
