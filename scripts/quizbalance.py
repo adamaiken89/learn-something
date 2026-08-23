@@ -4,9 +4,11 @@ Generation-stage tool: after the LLM writes quiz.yaml (choosing option
 *content* and the correct option), this reassigns option letter positions
 so the correct option lands on a balanced, no-3-run letter sequence.
 
-Option text per question is untouched — only letter keys move, so every
-question's semantics stay identical. Deterministic per (topic, module)
-seed: re-running is idempotent.
+Option text per question is untouched and its display ORDER is preserved:
+letters are reassigned by a cyclic rotation of the a/b/c/d labels over the
+fixed option sequence, so distractors keep their relative order around the
+correct answer (no arbitrary shuffling or pairwise swapping). Deterministic
+per (topic, module) seed: re-running is idempotent.
 
 Constraints enforced:
   - no 3 consecutive answers with the same letter
@@ -75,20 +77,23 @@ def balance_quiz(questions, seed):
             new_questions.append(q)
             continue
 
+        # Re-letter by cyclic rotation of the letter labels over the fixed
+        # option sequence: display order of the texts is preserved and the
+        # distractors keep their relative order around the correct option.
+        keys = [str(k).strip().lower() for k in q['options'].keys()]
+        if sorted(keys) != sorted(LETTERS):
+            skipped += 1
+            new_questions.append(q)
+            continue
+
         target = seq[si]
         si += 1
         after[target] += 1
 
-        # Rebuild options: correct text at target letter, others fill remaining
-        other_texts = [
-            q['options'][k] for k in sorted(q['options']) if k.strip().lower() != cur
-        ]
-        new_opts = {}
-        new_opts[target] = correct_text
-        for k, text in zip([L for L in LETTERS if L != target], other_texts):
-            new_opts[k] = text
-        # Option keys must be lowercase for schema
-        q['options'] = {str(k).lower(): v for k, v in new_opts.items()}
+        ordered_texts = [q['options'][k] for k in LETTERS]  # a,b,c,d order
+        shift = (LETTERS.index(target) - LETTERS.index(cur)) % 4
+        rotated = ordered_texts[-shift:] + ordered_texts[:-shift]
+        q['options'] = {L: rotated[i] for i, L in enumerate(LETTERS)}
         q['answer'] = target
         if cur != target:
             mutated += 1
