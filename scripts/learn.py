@@ -658,7 +658,10 @@ def cmd_quiz(topic: str, module: str, adaptive: bool = False, weak_only: bool = 
                 streak = 0
                 print(f'  {CYAN}难度提升 → Level {current_difficulty}{NC}')
         else:
-            print(f'{RED}✗ Wrong. Correct: {q.get("answer", "?")}{NC}')
+            display_key = next(
+                (k for k, v in keymap.items() if v == q.get('answer', '')), q.get('answer', '?')
+            )
+            print(f'{RED}✗ Wrong. Correct: {display_key}{NC}')
             quality = 1
             streak = 0
             # Adaptive: drop difficulty on wrong

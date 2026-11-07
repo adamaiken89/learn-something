@@ -58,11 +58,12 @@ Three theories fused:
 
 1. **Scope** (5 min): Ask domain/level/time budget/lang/use case. Propose syllabus.
 2. **Outline stage**: Verify module DAG + prerequisite chain. Check time budget.
-3. **Per module** (10 min): Create module with `learn.sh create-module <topic> NN-name`. Zero-padded two-digit number + kebab-case name (e.g., `01-intro`, `02-core-concepts`). **lesson.md H1 title is human-readable only**: `# Module NN: <name>` using the syllabus module `name` (e.g. `# Module 09: Layout & Container Composition`). Zero-padded `NN`, colon, human title. Never embed the directory slug (`NN-name`) in the H1 — the slug is the folder's name, not the title. Write lesson.md + quiz.yaml + cloze.yaml. Apply Part A rules inline. Respect the module time budget (`syllabus.yaml` `time_hours` ≤ 1.5h — the hard cap); if a lesson overflows its budget, split into additional modules and update syllabus. Lesson.md length is a soft guide only (WARN, never blocking; threshold user-settable via `validate --max-chars`). **quiz.yaml**: LLM writes option content + the correct option *by content* (letters as placeholders); run `learn.sh balance-quiz <topic> <module>` to re-letter answers into a balanced, no-3-run spread (deterministic per topic-module, backup `.bak`). **lesson.md**: run `learn.sh checksyntax <topic> <module> [--render api|local]` — lint mermaid blocks, code blocks (python/js/shell when interpreters present), and fence balance before continuing. User reviews. Proceed.
-4. **Validate**: Run `learn.sh validate <topic> [module]`. Fix all ERR + WARN before proceeding. Quality gate is blocking (all checks ERR). `balance-quiz` + `checksyntax` are the generation-stage, per-module guards; `validate` stays the final gate.
-5. **Pre-publication**: Load `content-verify.md`. Run checklist. Fix violations.
-6. **Compile SRS** (2 min): Extract MCQs → FSRS-6 deck.
-7. **Cumulative quizzes**: After every 3-4 modules (max span 4 — enforced by `validate`), generate `cumulative_quiz_XX-YY.yaml` in subject root (zero-padded module range, e.g. `cumulative_quiz_01-04.yaml`). See B2 for exact shape. Filename must carry the covered module range `XX-YY`; single-file `cumulative_quiz.yaml` is rejected.
+3. **Glossary** (5 min): Draft `<topic>/GLOSSARY.md` from syllabus topics — canonical term table before any module prose (see A4.2). Every module MUST reuse canonical forms; add new terms here as modules introduce them. Checked in content-verify, not in `validate`.
+4. **Per module** (10 min): Create module with `learn.sh create-module <topic> NN-name`. Zero-padded two-digit number + kebab-case name (e.g., `01-intro`, `02-core-concepts`). **lesson.md H1 title is human-readable only**: `# Module NN: <name>` using the syllabus module `name` (e.g. `# Module 09: Layout & Container Composition`). Zero-padded `NN`, colon, human title. Never embed the directory slug (`NN-name`) in the H1 — the slug is the folder's name, not the title. Write lesson.md + quiz.yaml + cloze.yaml. Apply Part A rules inline. Respect the module time budget (`syllabus.yaml` `time_hours` ≤ 1.5h — the hard cap); if a lesson overflows its budget, split into additional modules and update syllabus. Lesson.md length is a soft guide only (WARN, never blocking; threshold user-settable via `validate --max-chars`). **quiz.yaml**: LLM writes option content + the correct option *by content* (letters as placeholders); run `learn.sh balance-quiz <topic> <module>` to re-letter answers into a balanced, no-3-run spread (deterministic per topic-module, backup `.bak`). **lesson.md**: run `learn.sh checksyntax <topic> <module> [--render api|local]` — lint mermaid blocks, code blocks (python/js/shell when interpreters present), and fence balance before continuing. User reviews. Proceed.
+5. **Validate**: Run `learn.sh validate <topic> [module]`. Fix all ERR + WARN before proceeding. Quality gate is blocking (all checks ERR). `balance-quiz` + `checksyntax` are the generation-stage, per-module guards; `validate` stays the final gate.
+6. **Pre-publication**: Load `content-verify.md`. Run checklist (includes glossary term alignment). Fix violations.
+7. **Compile SRS** (2 min): Extract MCQs → FSRS-6 deck.
+8. **Cumulative quizzes**: After every 3-4 modules (max span 4 — enforced by `validate`), generate `cumulative_quiz_XX-YY.yaml` in subject root (zero-padded module range, e.g. `cumulative_quiz_01-04.yaml`). See B2 for exact shape. Filename must carry the covered module range `XX-YY`; single-file `cumulative_quiz.yaml` is rejected.
 
 ## A4. Content principles + quality rules
 
@@ -78,6 +79,7 @@ Three theories fused:
 - **Progression**: Build on prerequisites. Earlier modules foundational.
 - **Skip permitted**: Learner gives sparse input? Generate content anyway with sensible defaults. Do not block.
 - **Socratic throughout**: Every major concept followed by a question that makes learner stop and think — not only at module end. Pattern: state concept → ask "why?" / "what if?" → answer immediately so learner can self-check.
+- **Term consistency**: Canonical terms live in `<topic>/GLOSSARY.md`. Lessons, quizzes, cloze, SRS cards use canonical form only; variants in the Avoid column are forbidden in new content. First mention in a lesson may pair EN + local term (`Front Office 前台`); afterwards pick one form and keep it.
 
 ### Quality rules (17) — enforced by `learn.sh validate`
 
@@ -134,6 +136,30 @@ Is the content primarily:
 
 - ASCII `┌─┐ │ └─┘` boxes inside ` ```text ` blocks that simply list categories — convert to a markdown table.
 - Mermaid `flowchart` of a 2-3 item list — use a table instead.
+
+#### A4.2 Glossary — when and how
+
+**When:** Draft in A3 step 3 (after syllabus, before module 1). Update whenever a module introduces a term not yet listed. Optional file — skip only if course is single-language with zero synonym risk.
+
+**Where:** `<topic>/GLOSSARY.md` at subject root (template: `templates/glossary.md`).
+
+**Shape** (markdown table — author-facing, not schema-validated):
+
+| Column | Meaning |
+|---|---|
+| Term | English headword (or language-neutral symbol, e.g. `T+2`) |
+| Canonical | Form used in all content for syllabus `language` |
+| Avoid | Known wrong/synonymous variants — never use in new content |
+| Definition | One-line meaning (same sentence across modules) |
+| Appears | Module ids that own/teach the term (`01, 17`) |
+
+**Rules:**
+1. One row per concept — not per translation. EN↔local pairs are one row.
+2. `Canonical` is binding for lesson/quiz/cloze/cumulative/SRS text.
+3. `Avoid` grows from real drift found in review (e.g. `前線` when `前台` won).
+4. Domain synonyms that are genuinely different concepts get separate rows (`matching` vs `clearing` vs `settlement`).
+5. Cross-check: before finishing a module, grep lesson for each `Avoid` string; zero hits required.
+6. Not enforced by `validate` — enforcement is content-verify checklist + author discipline.
 
 ## A5. Study protocol
 
@@ -285,6 +311,7 @@ Machine-readable contract. Every artifact validates against `learn-something-sch
 ```
 <topic>/
 ├── syllabus.yaml             # Course spec (see B2)
+├── GLOSSARY.md               # Canonical terms (A4.2) — optional but recommended
 ├── cumulative_quiz_XX-YY.yaml   # Cross-module quizzes (after every 3-4 modules, span ≤4)
 ├── modules/
 │   ├── NN-name/              # Dir name must match NN-kebab-case

@@ -34,7 +34,7 @@ learn-something/
 ├── VERSION                   # Single-line version
 ├── scripts/                  # All executable logic (snake_case.py)
 ├── tests/                    # Zero-dep direct-run suites
-├── templates/                # syllabus.yaml / module.md / quiz.yaml / cloze.yaml
+├── templates/                # syllabus.yaml / module.md / quiz.yaml / cloze.yaml / glossary.md
 └── learn-something-schema/   # Canonical JSON Schemas + py/TS validator wrappers
 ```
 
@@ -94,6 +94,7 @@ Runtime data lives outside the repo: `~/.coursereader/subjects/<topic>/`
 | Topic | Source | Everyone else |
 |---|---|---|
 | 17 quality rules | SKILL.md Part A4 | mirror nothing |
+| Glossary format + rules | SKILL.md Part A4.2 | content-verify.md links only |
 | Automated checks table | SKILL.md Part B5 | content-verify.md links only |
 | Study protocol | SKILL.md Part A5 | mirrored verbatim in study-protocol.md |
 | Structure / modification | AGENTS.md | — |

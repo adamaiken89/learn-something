@@ -145,6 +145,7 @@ Python CLI. Key subsystems:
 | `syllabus.yaml` | 20-module default skeleton | time_hours per module ≤ 1.5 (hard cap, all levels), prerequisites form DAG. Level → module count: beginner ~25-30 (0.5-0.75h each), intermediate ~15-20 (1-1.5h), advanced ~20-30 (1-1.5h, open questions) |
 | `module.md`     | Lesson structure           | Must include: Real-World Example → Core Content (with **Think**, **Cloze**, **Predict**, Mermaid per section) → Why This Matters → Key Takeaways → Common Misconception → **Spot the Mistake** → Feynman Explain → Reframe → Drill |
 | `quiz.yaml`     | MCQ format                 | 4 options, 1 correct, difficulty 1-3, tags per category                                                                                                                                                                            |
+| `glossary.md`   | Course term table          | Columns: Term / Canonical / Avoid / Definition / Appears. Spec: SKILL.md A4.2. Not schema-validated — checked via content-verify checklist                                                                                       |
 
 ## Content Quality Rules
 

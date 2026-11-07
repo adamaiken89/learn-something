@@ -12,6 +12,7 @@ Load after each module generation. Verify against criteria below before presenti
 - [ ] No extraneous fluff? (CLT Mod2 — extraneous load)
 - [ ] Builds on previous modules? (schema building, CLT Mod2)
 - [ ] Ends with retrieval opportunity (Feynman/Drill)? (Retrieval Mod7)
+- [ ] Terms match `GLOSSARY.md`? Grep each `Avoid` variant in lesson/quiz/cloze — zero hits; new terms added to glossary (SKILL.md A4.2)
 
 ## Redundancy Effect Check
 
